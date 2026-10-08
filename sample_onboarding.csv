@@ -1,0 +1,6 @@
+email,full_name,role,password,roll_number,department
+tpo_head@college.edu,Dr. Smith,TPO_ADMIN,Admin@123,,
+spoc_cse@college.edu,Prof. Allen,TPO_ADMIN,Admin@123,,
+alice@college.edu,Alice Johnson,STUDENT,Student@123,CS2026001,CSE
+bob@college.edu,Bob Smith,STUDENT,Student@123,EC2026002,ECE
+charlie@college.edu,Charlie Brown,STUDENT,Student@123,IT2026003,IT

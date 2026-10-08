@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-serif: "Inter", system-ui, sans-serif;
+  
+  --color-stone-900: #121212;
+  --color-stone-800: #1E1E1C;
+  --color-stone-100: #EAE7E1;
+  --color-stone-50: #F2F0EB;
+  
+  --color-terracotta: #C86D53;
+  --color-terracotta-dark: #B35C44;
+  --color-terracotta-light: #E8A896;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--color-stone-50);
+  color: var(--color-stone-900);
+  overflow-x: hidden;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+::selection {
+  background: var(--color-terracotta);
+  color: var(--color-stone-50);
+}
+
+/* Fluid Typography Utilities */
+.fluid-h1 { font-size: clamp(3.5rem, 8vw + 1rem, 10rem); line-height: 0.9; tracking-tight: -0.04em; }
+.fluid-h2 { font-size: clamp(2.5rem, 5vw + 1rem, 6rem); line-height: 1; tracking-tight: -0.02em; }
+.fluid-h3 { font-size: clamp(1.75rem, 3vw + 1rem, 3.5rem); line-height: 1.1; tracking-tight: -0.01em; }
+
+/* Custom utilities */
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+.hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
