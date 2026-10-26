@@ -1,7 +1,8 @@
 import axios from 'axios';
 
+const host = typeof window !== 'undefined' && window.location.hostname === '127.0.0.1' ? '127.0.0.1' : 'localhost';
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api',
+  baseURL: `http://${host}:8050/api`,
 });
 
 // Interceptor to add JWT token if exists

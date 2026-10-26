@@ -11,8 +11,13 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str
 
-class UserResponse(UserBase):
+class UserResponse(BaseModel):
     id: int
+    email: str
+    full_name: str
+    role: RoleEnum
+    department: Optional[str] = None
+    is_active: bool = True
     created_at: datetime
 
     class Config:
@@ -21,6 +26,8 @@ class UserResponse(UserBase):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    role: str
+    full_name: str
 
 class TokenData(BaseModel):
     email: Optional[str] = None

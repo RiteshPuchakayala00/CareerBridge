@@ -1,38 +1,81 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import Login from './Login';
 import Landing from './Landing';
+import Login from './Login';
 import ForgotPassword from './ForgotPassword';
+import ActivateRecruiter from './pages/ActivateRecruiter';
+import TpoDashboard from './pages/TpoDashboard';
+import CoordinatorDashboard from './pages/CoordinatorDashboard';
+import RecruiterDashboard from './pages/RecruiterDashboard';
+import StudentDashboard from './pages/StudentDashboard';
+import ProtectedRoute from './components/ProtectedRoute';
 
-function DashboardPlaceholder() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="bg-white p-10 rounded-2xl shadow-xl text-center">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">Dashboard</h1>
-        <p className="text-gray-600">Authentication successful! Your JWT token is active.</p>
-        <button 
-          onClick={() => { localStorage.removeItem('token'); window.location.href = '/login'; }}
-          className="mt-6 px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 font-medium transition-colors"
-        >
-          Logout
-        </button>
-      </div>
-    </div>
-  );
+function RoleBasedDashboardRedirect() {
+  const token = localStorage.getItem('token');
+  const role = localStorage.getItem('role');
+
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (role === 'TPO_ADMIN') return <Navigate to="/tpo" replace />;
+  if (role === 'DEPT_COORDINATOR') return <Navigate to="/coordinator" replace />;
+  if (role === 'RECRUITER') return <Navigate to="/recruiter" replace />;
+  if (role === 'STUDENT') return <Navigate to="/student" replace />;
+
+  return <Navigate to="/login" replace />;
 }
 
-function App() {
+export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Public Routes */}
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/dashboard" element={<DashboardPlaceholder />} />
-        <Route path="*" element={<Navigate to="/" />} />
+        <Route path="/activate" element={<ActivateRecruiter />} />
+
+        {/* Dynamic Route Gateway */}
+        <Route path="/dashboard" element={<RoleBasedDashboardRedirect />} />
+
+        {/* 4 Dedicated Role-Protected Dashboards */}
+        <Route 
+          path="/tpo" 
+          element={
+            <ProtectedRoute allowedRoles={['TPO_ADMIN']}>
+              <TpoDashboard />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/coordinator" 
+          element={
+            <ProtectedRoute allowedRoles={['DEPT_COORDINATOR']}>
+              <CoordinatorDashboard />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/recruiter" 
+          element={
+            <ProtectedRoute allowedRoles={['RECRUITER']}>
+              <RecruiterDashboard />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/student" 
+          element={
+            <ProtectedRoute allowedRoles={['STUDENT']}>
+              <StudentDashboard />
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );
 }
-
-export default App;

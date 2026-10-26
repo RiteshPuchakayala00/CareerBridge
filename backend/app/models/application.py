@@ -6,8 +6,9 @@ from ..database import Base
 
 class AppStatus(str, enum.Enum):
     APPLIED = "APPLIED"
-    SHORTLISTED = "SHORTLISTED"
-    INTERVIEW = "INTERVIEW"
+    IN_PROGRESS = "IN_PROGRESS"  # Active in rounds
+    SHORTLISTED = "SHORTLISTED"  # Legacy compatibility
+    INTERVIEW = "INTERVIEW"      # Legacy compatibility
     OFFERED = "OFFERED"
     REJECTED = "REJECTED"
 
@@ -20,6 +21,12 @@ class Application(Base):
     
     status = Column(Enum(AppStatus), default=AppStatus.APPLIED)
     
+    # Spec §5.B: Round State Tracking
+    current_round_id = Column(Integer, ForeignKey("job_rounds.id", ondelete="SET NULL"), nullable=True)
+    scheduled_slot = Column(DateTime(timezone=True), nullable=True)
+    rejection_round_number = Column(Integer, nullable=True)
+    rejection_reason = Column(String, nullable=True)
+    
     # AI Feature
     ai_match_score = Column(Float, nullable=True)
     ai_analysis = Column(JSON, nullable=True)
@@ -30,3 +37,5 @@ class Application(Base):
     # Relationships
     student = relationship("StudentProfile", backref="applications")
     job = relationship("JobPosting", back_populates="applications")
+    current_round = relationship("JobRound", foreign_keys=[current_round_id], back_populates="applications")
+

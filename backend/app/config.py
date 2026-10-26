@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     
     GEMINI_API_KEY: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None
+
+    # Google SSO Settings
+    GOOGLE_CLIENT_ID: Optional[str] = None  # From Google Cloud Console
+    COLLEGE_DOMAIN: str = "college.edu"     # Institutional Google Workspace domain
     
     UPLOAD_DIR: str = "./uploads"
 
