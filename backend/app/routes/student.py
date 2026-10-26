@@ -21,6 +21,7 @@ from ..schemas.rbac import (
     ApplicationResponse, JobWithEligibility
 )
 from ..services.auth_service import require_role
+from ..services.one_offer_service import enforce_one_offer_policy
 from ..config import settings
 
 router = APIRouter(prefix="/api/student", tags=["Student"])
@@ -268,6 +269,13 @@ def apply_to_job(
     if not profile:
         raise HTTPException(status_code=404, detail="Student profile not found")
     
+    # ─── Rule 0: Mandatory Pre-Uploaded Resume ───
+    if not profile.resume_url or not profile.resume_url.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Resume required: You must upload your resume in the 'Profile Enrichment & Resume' tab before applying for any placement drive."
+        )
+
     # ─── Rule 1: One-Offer Policy ───
     if profile.is_placed == 1:
         raise HTTPException(
@@ -389,6 +397,21 @@ def track_applications(
     if not profile:
         return []
     
+    # Enforce One-Offer Policy cleanup if placed
+    if profile.is_placed == 1:
+        offered_item = db.query(Application, Company).join(
+            JobPosting, Application.job_id == JobPosting.id
+        ).outerjoin(
+            Company, JobPosting.company_id == Company.id
+        ).filter(
+            Application.student_id == profile.id,
+            Application.status == AppStatus.OFFERED
+        ).first()
+        if offered_item:
+            off_app, off_comp = offered_item
+            cname = off_comp.company_name if off_comp else "an enterprise"
+            enforce_one_offer_policy(db, profile.id, cname, off_app.id)
+
     apps = db.query(Application, JobPosting, Company).join(
         JobPosting, Application.job_id == JobPosting.id
     ).outerjoin(

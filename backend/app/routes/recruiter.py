@@ -21,6 +21,7 @@ from ..schemas.rbac import (
     ApplicationStatusUpdate
 )
 from ..services.auth_service import get_password_hash, require_role
+from ..services.one_offer_service import enforce_one_offer_policy
 
 router = APIRouter(prefix="/api/recruiter", tags=["Recruiter"])
 
@@ -291,11 +292,13 @@ def update_application_status(
     
     application.status = new_status
     
-    # If OFFERED, mark student as placed
+    # If OFFERED, mark student as placed and enforce One-Offer Policy
     if new_status == AppStatus.OFFERED:
         student = db.query(StudentProfile).filter(StudentProfile.id == application.student_id).first()
         if student:
             student.is_placed = 1
+            comp_name = company.company_name if company else "a company"
+            enforce_one_offer_policy(db, student.id, comp_name, application.id)
     
     db.commit()
     return {"message": f"Application status updated to {new_status.value}"}

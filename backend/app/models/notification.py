@@ -18,6 +18,7 @@ class NotificationCategory(str, enum.Enum):
     INQUIRY_REPLY = "INQUIRY_REPLY"
     OFFER = "OFFER"
     BROADCAST = "BROADCAST"
+    APPLICATION_STATUS = "APPLICATION_STATUS"
 
 
 class Notification(Base):

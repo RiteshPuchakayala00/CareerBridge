@@ -30,6 +30,7 @@ from ..schemas.round import (
 from ..models.notification import NotificationCategory
 from ..routes.notifications import create_system_notification
 from ..services.auth_service import require_role, get_current_user
+from ..services.one_offer_service import enforce_one_offer_policy
 
 
 router = APIRouter(prefix="/api/jobs", tags=["Job Lifecycle & Eligibility Engine"])
@@ -1007,7 +1008,7 @@ def publish_round_shortlist(
         app for app in all_job_apps
         if app.current_round_id == current_round.id or (
             current_round.round_number == 1 and (app.current_round_id is None or app.current_round_id == current_round.id)
-        )
+        ) or app.id in shortlist_ids
     ]
 
     shortlisted_count = 0
@@ -1035,15 +1036,17 @@ def publish_round_shortlist(
             else:
                 # Final round cleared → Offer Extended!
                 app.status = AppStatus.OFFERED
+                comp_name = job.company.company_name if (job.company and job.company.company_name) else "the company"
                 student = db.query(StudentProfile).filter(StudentProfile.id == app.student_id).first()
                 if student:
                     student.is_placed = 1
+                    enforce_one_offer_policy(db, student.id, comp_name, app.id)
                 if student_user_id:
                     create_system_notification(
                         db=db,
                         user_id=student_user_id,
                         title=f"🌟 Job Offer Received: {job.title}",
-                        message=f"Congratulations! You have received a job offer for {job.title} at {job.company_name}!",
+                        message=f"Congratulations! You have received a job offer for {job.title} at {comp_name}!",
                         category=NotificationCategory.OFFER,
                         action_url="/student"
                     )

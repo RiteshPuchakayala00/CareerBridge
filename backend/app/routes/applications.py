@@ -16,6 +16,7 @@ from ..models.company import Company
 from ..models.job_round import JobRound
 from ..models.application import Application, AppStatus
 from ..services.auth_service import require_role
+from ..services.one_offer_service import enforce_one_offer_policy
 
 router = APIRouter(prefix="/api/applications", tags=["Applications & Shortlisting"])
 
@@ -135,6 +136,21 @@ def get_my_applications(
     profile = db.query(StudentProfile).filter(StudentProfile.user_id == current_user.id).first()
     if not profile:
         return []
+
+    # Enforce One-Offer Policy cleanup if placed
+    if profile.is_placed == 1:
+        offered_item = db.query(Application, Company).join(
+            JobPosting, Application.job_id == JobPosting.id
+        ).outerjoin(
+            Company, JobPosting.company_id == Company.id
+        ).filter(
+            Application.student_id == profile.id,
+            Application.status == AppStatus.OFFERED
+        ).first()
+        if offered_item:
+            off_app, off_comp = offered_item
+            cname = off_comp.company_name if off_comp else "an enterprise"
+            enforce_one_offer_policy(db, profile.id, cname, off_app.id)
 
     apps = db.query(Application, JobPosting, Company).join(
         JobPosting, Application.job_id == JobPosting.id

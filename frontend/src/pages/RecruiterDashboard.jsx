@@ -394,8 +394,14 @@ export default function RecruiterDashboard() {
   };
 
   // Determine current active round for publishing
+  const selectedApplicants = applicants.filter(a => selectedAppIds.includes(a.application_id));
+  const candidateRoundNumber = selectedApplicants.length > 0 
+    ? (selectedApplicants[0].current_round_number || 1) 
+    : null;
+
   const activeRoundForShortlist = rounds.find(r => {
     if (roundFilter !== 'ALL') return r.round_number === parseInt(roundFilter);
+    if (candidateRoundNumber) return r.round_number === candidateRoundNumber;
     return true;
   }) || (rounds.length > 0 ? rounds[0] : null);
 
@@ -731,7 +737,9 @@ export default function RecruiterDashboard() {
                           className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition animate-pulse cursor-pointer"
                         >
                           <Send className="w-3.5 h-3.5" />
-                          Publish Shortlist for Next Round ({selectedAppIds.length} Selected)
+                          {nextRoundAfterCurrent 
+                            ? `Advance Shortlist to Round ${nextRoundAfterCurrent.round_number} (${selectedAppIds.length} Selected)`
+                            : `Extend Official Job Offers (${selectedAppIds.length} Selected)`}
                         </button>
                       )}
                     </div>
@@ -1413,8 +1421,14 @@ export default function RecruiterDashboard() {
                   <UserCheck className="w-5 h-5" />
                 </span>
                 <div>
-                  <h3 className="font-extrabold text-gray-900 text-base">Publish Shortlist for Next Round</h3>
-                  <p className="text-xs text-gray-500">Recruiter Shortlisting Authority (Spec §1.2 & §4)</p>
+                  <h3 className="font-extrabold text-gray-900 text-base">
+                    {nextRoundAfterCurrent 
+                      ? `Publish Shortlist for Round ${nextRoundAfterCurrent.round_number}: ${nextRoundAfterCurrent.name}`
+                      : 'Final Round Evaluation: Extend Official Job Offers'}
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    Evaluating Round {activeRoundForShortlist?.round_number}: {activeRoundForShortlist?.name}
+                  </p>
                 </div>
               </div>
               <button 
@@ -1428,19 +1442,23 @@ export default function RecruiterDashboard() {
             {/* Candidate Impact Summary */}
             <div className="grid grid-cols-2 gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
               <div className="space-y-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Shortlisted & Advancing</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+                  {nextRoundAfterCurrent ? 'Shortlisted & Advancing' : 'Selected for Official Offer'}
+                </span>
                 <p className="text-2xl font-black text-emerald-800">{selectedAppIds.length} Students</p>
-                <p className="text-[11px] text-emerald-700">
-                  {nextRoundAfterCurrent ? `Advancing to Round ${nextRoundAfterCurrent.round_number} (${nextRoundAfterCurrent.name})` : 'Final Round Cleared → Offers Extended!'}
+                <p className="text-[11px] text-emerald-700 font-semibold">
+                  {nextRoundAfterCurrent 
+                    ? `Advancing to Round ${nextRoundAfterCurrent.round_number} (${nextRoundAfterCurrent.name})` 
+                    : '🎉 Final Round Cleared → Official Job Offer Extended!'}
                 </p>
               </div>
               <div className="space-y-1 border-l border-gray-200 pl-3">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-red-700">Instant Transparent Rejection</span>
                 <p className="text-2xl font-black text-red-800">
-                  {filteredApplicants.filter(a => a.status !== 'REJECTED' && a.status !== 'OFFERED').length - selectedAppIds.length} Students
+                  {Math.max(0, applicants.filter(a => a.status !== 'REJECTED' && a.status !== 'OFFERED' && (a.current_round_number === activeRoundForShortlist?.round_number || (activeRoundForShortlist?.round_number === 1 && !a.current_round_number))).length - selectedAppIds.length)} Students
                 </p>
                 <p className="text-[11px] text-gray-500">
-                  Immediately marked as <span className="font-bold text-red-600">REJECTED</span> with closure notice so they can focus on upcoming drives.
+                  Immediately marked as <span className="font-bold text-red-600">REJECTED</span> with transparent closure notice for Round {activeRoundForShortlist?.round_number}.
                 </p>
               </div>
             </div>
@@ -1535,7 +1553,7 @@ export default function RecruiterDashboard() {
                 onClick={handlePublishShortlist}
                 className="px-5 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-xs transition cursor-pointer"
               >
-                {loading ? 'Publishing Shortlist...' : 'Confirm & Publish Shortlist'}
+                {loading ? 'Publishing...' : nextRoundAfterCurrent ? 'Confirm & Publish Shortlist' : 'Confirm & Extend Official Offers'}
               </button>
             </div>
           </div>

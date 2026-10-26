@@ -6,7 +6,7 @@ import {
   Briefcase, Sparkles, ExternalLink, RefreshCw, Send, CheckCircle, Clock, 
   MapPin, DollarSign, Calendar, AlertTriangle, ShieldCheck, Tag, Plus, X,
   Video, Laptop, Copy, Check, ArrowRight, Play, Users, Award,
-  HelpCircle, MessageCircle, MessageSquare, Pin, Megaphone
+  HelpCircle, MessageCircle, MessageSquare, Pin, Megaphone, Key
 } from 'lucide-react';
 import StudentNoticeBoard from '../components/StudentNoticeBoard';
 
@@ -271,6 +271,11 @@ export default function StudentDashboard() {
 
   // Apply to Job
   const handleApply = async (jobId) => {
+    if (!profile?.resume_url) {
+      showNotification("Resume required! Please upload your resume in the 'Profile Enrichment & Resume' tab before applying for placement drives.", true);
+      setActiveTab('profile');
+      return;
+    }
     setLoading(true);
     try {
       const res = await api.post(`/student/apply/${jobId}`);
@@ -424,6 +429,27 @@ export default function StudentDashboard() {
               <span className="text-xs text-gray-500">Eligibility verified against your academic record</span>
             </div>
 
+            {/* Resume Missing Pre-requisite Notice */}
+            {!profile?.resume_url && (
+              <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-100 text-amber-700 rounded-lg">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-amber-900">Pre-Uploaded Resume Required</h4>
+                    <p className="text-xs text-amber-700">You must upload your resume PDF before applying to any campus placement drive.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setActiveTab('profile')}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg transition self-start sm:self-auto cursor-pointer"
+                >
+                  <UploadCloud className="w-3.5 h-3.5" /> Upload Resume Now
+                </button>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {jobs
                 .filter(job => {
@@ -500,6 +526,16 @@ export default function StudentDashboard() {
                         <div className="w-full py-2.5 text-center text-xs font-bold text-emerald-700 bg-emerald-50 rounded-xl border border-emerald-200">
                           ✓ Application Submitted
                         </div>
+                      ) : !profile?.resume_url && job.is_eligible ? (
+                        <button
+                          onClick={() => {
+                            showNotification("Please upload your resume in the 'Profile Enrichment & Resume' tab before applying.", true);
+                            setActiveTab('profile');
+                          }}
+                          className="w-full py-2.5 px-4 rounded-xl text-xs font-bold transition shadow-xs bg-amber-500 hover:bg-amber-600 text-white cursor-pointer flex items-center justify-center gap-1.5"
+                        >
+                          <UploadCloud className="w-4 h-4" /> Upload Resume to Apply
+                        </button>
                       ) : (
                         <button
                           onClick={() => handleApply(job.id)}
@@ -544,6 +580,24 @@ export default function StudentDashboard() {
         {/* TAB 2: MY APPLICATIONS & DYNAMIC ROUND PIPELINE (Spec §3 & §4) */}
         {activeTab === 'applications' && (
           <div className="space-y-6">
+            {profile?.is_placed ? (
+              <div className="p-5 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border border-emerald-300 text-emerald-950 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+                <div className="flex items-center gap-3.5">
+                  <div className="p-3 bg-emerald-600 text-white rounded-xl shadow-xs">
+                    <Award className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-extrabold text-emerald-950 flex items-center gap-2">
+                      Placement Secured & Verified 🔒
+                    </h3>
+                    <p className="text-xs text-emerald-800 mt-0.5">
+                      Congratulations! You have secured an official campus placement offer. Under the university One-Offer Policy, participation in other drives has been gracefully concluded to open opportunities for your batchmates.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h3 className="font-extrabold text-gray-900 text-lg">My Recruitment Drives & Round Pipeline</h3>
@@ -607,8 +661,20 @@ export default function StudentDashboard() {
                             <Award className="w-4 h-4 text-emerald-600" /> Official Offer Extended 🎉
                           </span>
                         ) : isRejected ? (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-red-100 text-red-900 border border-red-300 shadow-2xs">
-                            <X className="w-4 h-4 text-red-600" /> Eliminated at Round {app.rejection_round_number || 1}
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black shadow-2xs ${
+                            app.rejection_reason && app.rejection_reason.includes('One-Offer')
+                              ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                              : 'bg-red-100 text-red-900 border border-red-300'
+                          }`}>
+                            {app.rejection_reason && app.rejection_reason.includes('One-Offer') ? (
+                              <>
+                                <Lock className="w-4 h-4 text-amber-600" /> Concluded (One-Offer Policy)
+                              </>
+                            ) : (
+                              <>
+                                <X className="w-4 h-4 text-red-600" /> Eliminated at Round {app.rejection_round_number || 1}
+                              </>
+                            )}
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-blue-100 text-blue-900 border border-blue-300 shadow-2xs">
@@ -672,23 +738,39 @@ export default function StudentDashboard() {
 
                     {/* TRANSPARENT REJECTION CLOSURE CARD (Spec §1.3 & §4) */}
                     {isRejected && (
-                      <div className="p-5 bg-gradient-to-br from-red-50 to-white rounded-xl border border-red-200 space-y-2">
-                        <div className="flex items-center gap-2 text-red-900 font-bold text-sm">
-                          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-                          <span>Drive Participation Closure Notice</span>
+                      <div className={`p-5 rounded-xl border space-y-2 ${
+                        app.rejection_reason && app.rejection_reason.includes('One-Offer')
+                          ? 'bg-gradient-to-br from-amber-50 to-white border-amber-200 text-amber-900'
+                          : 'bg-gradient-to-br from-red-50 to-white border-red-200'
+                      }`}>
+                        <div className={`flex items-center gap-2 font-bold text-sm ${
+                          app.rejection_reason && app.rejection_reason.includes('One-Offer')
+                            ? 'text-amber-900'
+                            : 'text-red-900'
+                        }`}>
+                          {app.rejection_reason && app.rejection_reason.includes('One-Offer') ? (
+                            <Lock className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                          ) : (
+                            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                          )}
+                          <span>
+                            {app.rejection_reason && app.rejection_reason.includes('One-Offer')
+                              ? 'Drive Concluded — University One-Offer Policy'
+                              : 'Drive Participation Closure Notice'}
+                          </span>
                         </div>
-                        <p className="text-xs text-red-800 leading-relaxed font-medium">
+                        <p className={`text-xs leading-relaxed font-medium ${
+                          app.rejection_reason && app.rejection_reason.includes('One-Offer')
+                            ? 'text-amber-800'
+                            : 'text-red-800'
+                        }`}>
                           {app.rejection_reason || `You were not shortlisted for Round ${app.rejection_round_number || 1}.`}
                         </p>
                         <p className="text-xs text-gray-600 pt-1">
-                          In accordance with campus placement transparency policy, unselected candidates are notified immediately so you have full clarity and can direct all energy toward upcoming placement drives.
+                          {app.rejection_reason && app.rejection_reason.includes('One-Offer')
+                            ? 'Under university policy, securing an official placement offer locks your placement and automatically withdraws active participation in other drives to ensure equal opportunities for all graduating peers.'
+                            : 'In accordance with campus placement transparency policy, unselected candidates are notified immediately so you have full clarity and can direct all energy toward upcoming placement drives.'}
                         </p>
-                        <button
-                          onClick={() => setActiveTab('jobs')}
-                          className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-red-700 bg-red-100 hover:bg-red-200 rounded-lg transition cursor-pointer"
-                        >
-                          Explore Upcoming Drives <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
                       </div>
                     )}
 
