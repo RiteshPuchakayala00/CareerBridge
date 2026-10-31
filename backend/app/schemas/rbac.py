@@ -8,6 +8,7 @@ class CoordinatorCreate(BaseModel):
     email: EmailStr
     full_name: str
     department: str  # e.g., "CSE", "ECE", "MECH"
+    password: Optional[str] = None
 
 class CoordinatorResponse(BaseModel):
     id: int
@@ -172,6 +173,7 @@ class JobWithEligibility(BaseModel):
     is_eligible: bool = False
     ineligibility_reason: Optional[str] = None
     has_applied: Optional[bool] = False
+    is_deadline_passed: Optional[bool] = False
 
 # ─── Analytics Schemas ───
 

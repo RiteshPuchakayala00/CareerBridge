@@ -24,6 +24,7 @@ class Application(Base):
     # Spec §5.B: Round State Tracking
     current_round_id = Column(Integer, ForeignKey("job_rounds.id", ondelete="SET NULL"), nullable=True)
     scheduled_slot = Column(DateTime(timezone=True), nullable=True)
+    round_started_at = Column(DateTime(timezone=True), nullable=True)
     rejection_round_number = Column(Integer, nullable=True)
     rejection_reason = Column(String, nullable=True)
     

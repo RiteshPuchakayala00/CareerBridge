@@ -198,7 +198,7 @@ export default function Login() {
             <div className="flex items-center justify-between mb-1">
               <label className="block text-xs font-semibold text-gray-700 uppercase">Password</label>
               <Link to="/forgot-password" className="text-xs font-medium text-blue-600 hover:text-blue-500">
-                Forgot password?
+                Set / Reset Password?
               </Link>
             </div>
             <div className="relative">
@@ -221,6 +221,9 @@ export default function Login() {
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
+            <p className="text-[11px] text-gray-500 mt-1">
+              First time signing in with a password? Use <Link to="/forgot-password" className="text-blue-600 font-semibold hover:underline">Set Password</Link> or sign in directly with Google above.
+            </p>
           </div>
 
           <button

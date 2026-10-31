@@ -180,6 +180,32 @@ class AppStatus(str, enum.Enum):
 | :--- | :---: | :--- | :--- |
 | `/api/jobs/{id}/rounds` | `POST` | `RECRUITER` | Defines the sequence of rounds for a job posting. |
 | `/api/jobs/{id}/rounds` | `GET` | All Roles | Lists all configured rounds and their types for a drive. |
-| `/api/jobs/{id}/rounds/{round_id}/logistics` | `PATCH` | `RECRUITER`, `COORDINATOR` | Updates test links, meeting links, venue, and time windows. |
+| `/api/jobs/{id}/rounds/{round_id}/logistics` | `PATCH` | `RECRUITER`, `COORDINATOR` | Updates test links, meeting links, venue, and start buffer time windows (`start_time`, `end_time`). |
 | `/api/jobs/{id}/rounds/{round_id}/shortlist` | `POST` | `RECRUITER` | Publishes shortlisted candidate IDs. Advances them to the next round and automatically marks all others as `REJECTED`. |
-| `/api/applications/my-applications` | `GET` | `STUDENT` | Returns student applications with current round tracker, scheduled slots, and active test/meeting launch buttons. |
+| `/api/applications/my-applications` | `GET` | `STUDENT` | Returns student applications with current round tracker, scheduled slots, buffer states, and verified launch buttons. |
+| `/api/applications/{id}/launch` | `POST` | `STUDENT` | Validates entry buffer window, records `round_started_at`, and unlocks test or meeting link. |
+
+---
+
+## 7. Round Start Buffer Window & Entry Verification
+
+### 7.1 Business Rationale
+Placement assessments and interviews require flexibility in candidate start times without compromising integrity:
+- **Online Tests (OT)**: Rather than requiring every student to start at exactly 1:00 PM (risking server crashes or minor network delays), recruiters define an **Entry Buffer Window** (e.g. attend/start the OT anytime between **1:00 PM and 2:00 PM**).
+- **Virtual Interviews**: Candidates enter a buffer window relative to their assigned slot (e.g. video room activates 10 minutes prior to slot and permits entry up to 20 minutes past slot).
+- **Full Duration Preservation**: Starting at 1:45 PM during a 1:00 PM – 2:00 PM window still allows the student their full test duration (e.g. 60 minutes until 2:45 PM), managed by the assessment platform.
+
+### 7.2 Entry Lifecycle States
+| State | Condition | UI Presentation | Gating Action |
+| :--- | :--- | :--- | :--- |
+| `UPCOMING` | `now < window_start` | Amber badge with live countdown until window opens. | Locked. Button displays "Unlocks at {time}". Attempts to launch return HTTP 400. |
+| `ACTIVE_BUFFER` | `window_start <= now <= window_end` (unstarted) | Green pulsing badge with remaining time countdown to begin. | Unlocked. Button triggers `/api/applications/{id}/launch` and opens test URL. |
+| `STARTED` | `round_started_at` is set | Blue badge ("Attempt in Progress") with start timestamp. | Permitted. Candidate can re-enter test/meeting URL anytime if browser closes. |
+| `EXPIRED` | `now > window_end` and `round_started_at` is null | Red badge ("Disqualified — Missed Round") with explicit warning banner. | **Permanently locked & Disqualified.** Automatically marks application as `REJECTED` in DB with reason: *"You missed the round in the given time. You cannot proceed further."* |
+
+### 7.3 Security & Enforcement
+1. **Server-Side Verification**: Entry validation is strictly enforced on the backend at `POST /api/applications/{id}/launch` against server UTC time.
+2. **Auto-Disqualification on Expiry**: If a student fails to enter before `window_end`, their application status is automatically transitioned to `REJECTED`, marking the round with an `✕` in the pipeline tracker and permanently blocking entry.
+3. **Re-entry Resilience**: The `round_started_at` timestamp ensures that legitimate candidates who entered during the buffer window can re-open their link without being locked out.
+
+

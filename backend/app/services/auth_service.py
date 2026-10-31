@@ -5,6 +5,7 @@ from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from ..database import get_db
 from ..config import settings
@@ -13,11 +14,15 @@ from ..models.user import User
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    if not plain_password or not hashed_password:
+        return False
+    # Bcrypt maximum input length is 72 bytes
+    return pwd_context.verify(plain_password[:72], hashed_password)
 
-def get_password_hash(password):
-    return pwd_context.hash(password)
+def get_password_hash(password: str) -> str:
+    # Bcrypt maximum input length is 72 bytes
+    return pwd_context.hash(password[:72])
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
@@ -43,17 +48,40 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     except JWTError:
         raise credentials_exception
         
-    user = db.query(User).filter(User.email == email).first()
+    user = db.query(User).filter(func.lower(User.email) == email.strip().lower()).first()
     if user is None:
         raise credentials_exception
+    
+    # Check if the user account has been deactivated or decommissioned
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account has been deactivated. Please contact the TPO Admin."
+        )
+        
     return user
 
 def require_role(allowed_roles: list):
+    """
+    Enforces role-based authorization.
+    Supports RoleEnum instances, string role names, and mixed lists.
+    """
+    allowed_role_values = {
+        r.value if hasattr(r, "value") else str(r).strip().upper()
+        for r in allowed_roles
+    }
+    
     def role_checker(current_user: User = Depends(get_current_user)):
-        if current_user.role not in allowed_roles:
+        user_role_val = (
+            current_user.role.value
+            if hasattr(current_user.role, "value")
+            else str(current_user.role).strip().upper()
+        )
+        if user_role_val not in allowed_role_values:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have enough permissions"
             )
         return current_user
     return role_checker
+

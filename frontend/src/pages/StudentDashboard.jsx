@@ -6,7 +6,7 @@ import {
   Briefcase, Sparkles, ExternalLink, RefreshCw, Send, CheckCircle, Clock, 
   MapPin, DollarSign, Calendar, AlertTriangle, ShieldCheck, Tag, Plus, X,
   Video, Laptop, Copy, Check, ArrowRight, Play, Users, Award,
-  HelpCircle, MessageCircle, MessageSquare, Pin, Megaphone, Key
+  HelpCircle, MessageCircle, MessageSquare, Pin, Megaphone, Key, Eye, EyeOff
 } from 'lucide-react';
 import StudentNoticeBoard from '../components/StudentNoticeBoard';
 
@@ -19,11 +19,160 @@ export default function StudentDashboard() {
   const [message, setMessage] = useState(null);
   const [error, setError] = useState(null);
   const [copiedCode, setCopiedCode] = useState(null);
+  const [currentTime, setCurrentTime] = useState(Date.now());
+  const [launchingAppId, setLaunchingAppId] = useState(null);
+
+  // Live timer tick for real-time buffer countdowns
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const handleCopyCode = (code) => {
     navigator.clipboard.writeText(code);
     setCopiedCode(code);
     setTimeout(() => setCopiedCode(null), 3000);
+  };
+
+  const getBufferStatus = (currRound) => {
+    if (!currRound) return null;
+
+    if (currRound.round_started_at) {
+      const startedDate = new Date(currRound.round_started_at);
+      return {
+        state: 'STARTED',
+        badge: 'Attempt in Progress',
+        color: 'blue',
+        message: `Attempt started at ${startedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Re-entry permitted.`,
+        canLaunch: true,
+        buttonText: currRound.round_type === 'ONLINE_TEST' ? 'Re-Enter Assessment' : 'Re-Join Interview'
+      };
+    }
+
+    const wStart = currRound.window_start ? new Date(currRound.window_start).getTime() : (currRound.start_time ? new Date(currRound.start_time).getTime() : null);
+    const wEnd = currRound.window_end ? new Date(currRound.window_end).getTime() : (currRound.end_time ? new Date(currRound.end_time).getTime() : null);
+    const now = currentTime;
+
+    if (wStart && wEnd) {
+      if (now < wStart) {
+        const diffSec = Math.max(0, Math.floor((wStart - now) / 1000));
+        const hours = Math.floor(diffSec / 3600);
+        const mins = Math.floor((diffSec % 3600) / 60);
+        const secs = diffSec % 60;
+        const timeStr = hours > 0 ? `${hours}h ${mins}m ${secs}s` : `${mins}m ${secs}s`;
+        const startStr = new Date(wStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const endStr = new Date(wEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return {
+          state: 'UPCOMING',
+          badge: 'Window Opens Soon',
+          color: 'amber',
+          message: `Entry window: ${startStr} to ${endStr}. Test link unlocks in ${timeStr}.`,
+          canLaunch: false,
+          buttonText: `Unlocks at ${startStr} (${timeStr})`
+        };
+      } else if (now <= wEnd) {
+        const remSec = Math.max(0, Math.floor((wEnd - now) / 1000));
+        const hours = Math.floor(remSec / 3600);
+        const mins = Math.floor((remSec % 3600) / 60);
+        const secs = remSec % 60;
+        const timeStr = hours > 0 ? `${hours}h ${mins}m ${secs}s` : `${mins}m ${secs}s`;
+        const endStr = new Date(wEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return {
+          state: 'ACTIVE_BUFFER',
+          badge: 'Entry Buffer Open',
+          color: 'emerald',
+          message: `Entry buffer active! Must start before ${endStr} (${timeStr} remaining to begin).`,
+          canLaunch: true,
+          buttonText: currRound.round_type === 'ONLINE_TEST' ? 'Start Assessment Now' : 'Join Virtual Room'
+        };
+      } else {
+        const endStr = new Date(wEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return {
+          state: 'EXPIRED',
+          badge: 'Round Missed (Disqualified)',
+          color: 'red',
+          message: `The entry buffer closed at ${endStr}. You missed the round in the given time and cannot proceed further in this placement drive.`,
+          canLaunch: false,
+          buttonText: 'You Missed The Round — Disqualified'
+        };
+      }
+    }
+
+    if (wStart && !wEnd) {
+      if (now < wStart) {
+        const startStr = new Date(wStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return {
+          state: 'UPCOMING',
+          badge: 'Opens Soon',
+          color: 'amber',
+          message: `Opens at ${startStr}.`,
+          canLaunch: false,
+          buttonText: `Unlocks at ${startStr}`
+        };
+      }
+      return {
+        state: 'ACTIVE_BUFFER',
+        badge: 'Active',
+        color: 'emerald',
+        message: 'Assessment is currently active.',
+        canLaunch: true,
+        buttonText: currRound.round_type === 'ONLINE_TEST' ? 'Launch Assessment' : 'Join Interview'
+      };
+    }
+
+    return {
+      state: 'NO_RESTRICTION',
+      badge: 'Open Access',
+      color: 'emerald',
+      message: 'Assessment link is available.',
+      canLaunch: true,
+      buttonText: currRound.button_label || (currRound.round_type === 'ONLINE_TEST' ? 'Launch Assessment' : 'Join Interview')
+    };
+  };
+
+  const handleLaunchRound = async (app, currRound) => {
+    const buf = getBufferStatus(currRound);
+    if (!buf || !buf.canLaunch) {
+      if (buf && buf.state === 'UPCOMING') {
+        showNotification(buf.message || 'The start window has not opened yet.', true);
+      } else if (buf && buf.state === 'EXPIRED') {
+        showNotification(buf.message || 'The start buffer window has closed.', true);
+      }
+      return;
+    }
+
+    setLaunchingAppId(app.id);
+    try {
+      const res = await api.post(`/applications/${app.id}/launch`);
+      const launchUrl = res.data.launch_url || currRound.launch_url || currRound.test_url || currRound.meeting_url;
+
+      // Update state locally so UI marks attempt as started immediately
+      setApplications(prev => prev.map(a => {
+        if (a.id === app.id && a.current_round) {
+          return {
+            ...a,
+            current_round: {
+              ...a.current_round,
+              round_started_at: res.data.round_started_at || new Date().toISOString()
+            }
+          };
+        }
+        return a;
+      }));
+
+      showNotification(res.data.message || 'Round launched successfully within entry buffer window.');
+
+      if (launchUrl) {
+        window.open(launchUrl, '_blank');
+      }
+    } catch (err) {
+      console.error('Launch verification error:', err);
+      showNotification(err.response?.data?.detail || 'Failed to start round. Please try again.', true);
+    } finally {
+      setLaunchingAppId(null);
+    }
   };
 
   // Enrichment Form state
@@ -59,6 +208,14 @@ export default function StudentDashboard() {
   const [faqsModalOpen, setFaqsModalOpen] = useState(false);
   const [faqsJob, setFaqsJob] = useState({ id: null, title: '', faqs: [] });
   const [loadingFaqs, setLoadingFaqs] = useState(false);
+
+  // Account Security & Password State (Hybrid Google SSO + Manual Password)
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState(null);
+  const [passwordError, setPasswordError] = useState(null);
+  const [showSecurityPwd, setShowSecurityPwd] = useState(false);
 
   const showNotification = (msg, isErr = false) => {
     if (isErr) {
@@ -289,6 +446,36 @@ export default function StudentDashboard() {
     }
   };
 
+  const handleSetPassword = async (e) => {
+    e.preventDefault();
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    if (newPassword.length < 6) {
+      setPasswordError("Password must be at least 6 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Passwords do not match.");
+      return;
+    }
+
+    setSavingPassword(true);
+    try {
+      await api.post('/auth/change-password', {
+        new_password: newPassword
+      });
+      setPasswordSuccess("Password updated successfully! You can now sign in using both Google SSO and email & password.");
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => setPasswordSuccess(null), 6000);
+    } catch (err) {
+      setPasswordError(err.response?.data?.detail || "Failed to update password.");
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
   const appliedJobIds = new Set(applications.map(a => a.job_id));
 
   return (
@@ -459,11 +646,17 @@ export default function StudentDashboard() {
                 })
                 .map(job => {
                 const hasApplied = appliedJobIds.has(job.id);
+                const isDeadlinePassed = job.is_deadline_passed || (job.deadline && new Date(job.deadline) < new Date());
+
                 return (
                   <div 
                     key={job.id}
                     className={`bg-white rounded-2xl border p-6 flex flex-col justify-between transition-all ${
-                      job.is_eligible 
+                      hasApplied
+                        ? 'border-emerald-200 bg-emerald-50/20'
+                        : isDeadlinePassed
+                        ? 'border-amber-200/80 bg-gray-50/70 opacity-85'
+                        : job.is_eligible 
                         ? 'border-gray-200 hover:border-blue-300 hover:shadow-md' 
                         : 'border-gray-200 bg-gray-50/60 opacity-80'
                     }`}
@@ -474,15 +667,22 @@ export default function StudentDashboard() {
                         <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-gray-100 text-gray-800">
                           {job.company_name || 'Enterprise'}
                         </span>
-                        {job.is_eligible ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                            <CheckCircle className="w-3.5 h-3.5" /> ELIGIBLE
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-200">
-                            <AlertTriangle className="w-3.5 h-3.5" /> INELIGIBLE
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          {isDeadlinePassed && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                              <Clock className="w-3 h-3 text-amber-700" /> DEADLINE PASSED
+                            </span>
+                          )}
+                          {job.is_eligible && !isDeadlinePassed ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              <CheckCircle className="w-3.5 h-3.5" /> ELIGIBLE
+                            </span>
+                          ) : !hasApplied && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-200">
+                              <AlertTriangle className="w-3.5 h-3.5" /> INELIGIBLE
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {/* Title & CTC */}
@@ -494,7 +694,7 @@ export default function StudentDashboard() {
                       {/* Ineligibility Reason Callout */}
                       {!job.is_eligible && job.ineligibility_reason && (
                         <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">
-                          <span className="font-semibold block mb-0.5">Criteria Not Met:</span>
+                          <span className="font-semibold block mb-0.5">Eligibility Notice:</span>
                           {job.ineligibility_reason}
                         </div>
                       )}
@@ -513,6 +713,13 @@ export default function StudentDashboard() {
                         <div>
                           <span className="text-gray-400">Drive Date:</span> <span className="font-semibold text-gray-800">{job.drive_date ? new Date(job.drive_date).toLocaleDateString() : 'TBD'}</span>
                         </div>
+                        <div className="col-span-2 flex items-center gap-1.5 pt-1 border-t border-gray-100">
+                          <span className="text-gray-400">Application Deadline:</span>{' '}
+                          <span className={`font-semibold ${isDeadlinePassed ? 'text-red-600 font-bold' : 'text-gray-800'}`}>
+                            {job.deadline ? new Date(job.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Open'}
+                            {isDeadlinePassed ? ' (Expired)' : ''}
+                          </span>
+                        </div>
                       </div>
 
                       <p className="mt-3 text-xs text-gray-500 line-clamp-2">
@@ -526,6 +733,14 @@ export default function StudentDashboard() {
                         <div className="w-full py-2.5 text-center text-xs font-bold text-emerald-700 bg-emerald-50 rounded-xl border border-emerald-200">
                           ✓ Application Submitted
                         </div>
+                      ) : isDeadlinePassed ? (
+                        <button
+                          type="button"
+                          disabled
+                          className="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-gray-100 text-gray-500 border border-gray-200 cursor-not-allowed flex items-center justify-center gap-1.5"
+                        >
+                          <Clock className="w-4 h-4 text-gray-400" /> Application Deadline Closed
+                        </button>
                       ) : !profile?.resume_url && job.is_eligible ? (
                         <button
                           onClick={() => {
@@ -616,6 +831,7 @@ export default function StudentDashboard() {
             <div className="space-y-6">
               {applications.map(app => {
                 const currRound = app.current_round;
+                const buffer = getBufferStatus(currRound);
                 const isRejected = app.status === 'REJECTED';
                 const isOffered = app.status === 'OFFERED';
                 const hasRounds = app.all_rounds && app.all_rounds.length > 0;
@@ -669,6 +885,10 @@ export default function StudentDashboard() {
                             {app.rejection_reason && app.rejection_reason.includes('One-Offer') ? (
                               <>
                                 <Lock className="w-4 h-4 text-amber-600" /> Concluded (One-Offer Policy)
+                              </>
+                            ) : app.rejection_reason && (app.rejection_reason.includes('missed') || app.rejection_reason.includes('Missed')) ? (
+                              <>
+                                <X className="w-4 h-4 text-red-600" /> Disqualified — Missed Round {app.rejection_round_number || 1}
                               </>
                             ) : (
                               <>
@@ -736,14 +956,16 @@ export default function StudentDashboard() {
                       </div>
                     )}
 
-                    {/* TRANSPARENT REJECTION CLOSURE CARD (Spec §1.3 & §4) */}
+                    {/* TRANSPARENT REJECTION CLOSURE CARD (Spec §1.3 & §4 & Missed Round Enforcement) */}
                     {isRejected && (
-                      <div className={`p-5 rounded-xl border space-y-2 ${
+                      <div className={`p-5 rounded-xl border space-y-3 ${
                         app.rejection_reason && app.rejection_reason.includes('One-Offer')
                           ? 'bg-gradient-to-br from-amber-50 to-white border-amber-200 text-amber-900'
+                          : app.rejection_reason && (app.rejection_reason.includes('missed') || app.rejection_reason.includes('Missed'))
+                          ? 'bg-gradient-to-br from-red-50 via-white to-red-50/40 border-2 border-red-300 text-red-950 shadow-xs'
                           : 'bg-gradient-to-br from-red-50 to-white border-red-200'
                       }`}>
-                        <div className={`flex items-center gap-2 font-bold text-sm ${
+                        <div className={`flex items-center gap-2 font-black text-sm ${
                           app.rejection_reason && app.rejection_reason.includes('One-Offer')
                             ? 'text-amber-900'
                             : 'text-red-900'
@@ -756,25 +978,42 @@ export default function StudentDashboard() {
                           <span>
                             {app.rejection_reason && app.rejection_reason.includes('One-Offer')
                               ? 'Drive Concluded — University One-Offer Policy'
+                              : app.rejection_reason && (app.rejection_reason.includes('missed') || app.rejection_reason.includes('Missed'))
+                              ? 'Drive Disqualification — Missed Round'
                               : 'Drive Participation Closure Notice'}
                           </span>
                         </div>
-                        <p className={`text-xs leading-relaxed font-medium ${
-                          app.rejection_reason && app.rejection_reason.includes('One-Offer')
-                            ? 'text-amber-800'
-                            : 'text-red-800'
-                        }`}>
-                          {app.rejection_reason || `You were not shortlisted for Round ${app.rejection_round_number || 1}.`}
-                        </p>
-                        <p className="text-xs text-gray-600 pt-1">
+
+                        {app.rejection_reason && (app.rejection_reason.includes('missed') || app.rejection_reason.includes('Missed')) ? (
+                          <div className="p-3.5 bg-red-100/90 rounded-xl border border-red-200 space-y-1.5">
+                            <h6 className="text-sm font-black text-red-900 flex items-center gap-2">
+                              ⛔ You missed the round in the given time. You cannot proceed further.
+                            </h6>
+                            <p className="text-xs text-red-800 font-medium leading-relaxed">
+                              {app.rejection_reason}
+                            </p>
+                          </div>
+                        ) : (
+                          <p className={`text-xs leading-relaxed font-medium ${
+                            app.rejection_reason && app.rejection_reason.includes('One-Offer')
+                              ? 'text-amber-800'
+                              : 'text-red-800'
+                          }`}>
+                            {app.rejection_reason || `You were not shortlisted for Round ${app.rejection_round_number || 1}.`}
+                          </p>
+                        )}
+
+                        <p className="text-xs text-gray-600 pt-0.5">
                           {app.rejection_reason && app.rejection_reason.includes('One-Offer')
                             ? 'Under university policy, securing an official placement offer locks your placement and automatically withdraws active participation in other drives to ensure equal opportunities for all graduating peers.'
+                            : app.rejection_reason && (app.rejection_reason.includes('missed') || app.rejection_reason.includes('Missed'))
+                            ? 'Drive regulations require attending assessments and interviews within the recruiter buffer window. Since this round was not entered within the given timeframe, participation in this drive is closed.'
                             : 'In accordance with campus placement transparency policy, unselected candidates are notified immediately so you have full clarity and can direct all energy toward upcoming placement drives.'}
                         </p>
                       </div>
                     )}
 
-                    {/* ACTIVE ROUND CARD & LINK DELIVERY (Spec §3) */}
+                    {/* ACTIVE ROUND CARD & LINK DELIVERY (Spec §3 & Buffer Window Feature) */}
                     {!isRejected && !isOffered && currRound && (
                       <div className="p-5 bg-gradient-to-br from-blue-50/70 via-white to-indigo-50/40 rounded-xl border-2 border-blue-200 shadow-xs space-y-4">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -792,7 +1031,7 @@ export default function StudentDashboard() {
                             </span>
                             <div>
                               <span className="text-[10px] font-black uppercase tracking-wider text-blue-700 block">
-                                Round {currRound.round_number} Active Delivery Card
+                                Round {currRound.round_number} Assessment Card
                               </span>
                               <h5 className="text-base font-extrabold text-gray-900">
                                 {currRound.name}
@@ -800,17 +1039,88 @@ export default function StudentDashboard() {
                             </div>
                           </div>
 
-                          <span className={`text-xs font-bold px-3 py-1 rounded-full self-start sm:self-auto ${
-                            currRound.round_type === 'ONLINE_TEST' ? 'bg-purple-100 text-purple-800' :
-                            currRound.round_type === 'VIRTUAL_INTERVIEW' ? 'bg-blue-100 text-blue-800' :
-                            currRound.round_type === 'OFFLINE_INTERVIEW' ? 'bg-emerald-100 text-emerald-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {currRound.round_type === 'ONLINE_TEST' ? 'Online Coding Assessment' :
-                             currRound.round_type === 'VIRTUAL_INTERVIEW' ? 'Virtual Video Interview' :
-                             currRound.round_type === 'OFFLINE_INTERVIEW' ? 'On-Campus Face-to-Face' : 'Group Assessment'}
-                          </span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {/* Live Buffer Status Badge */}
+                            {buffer && (
+                              <span className={`text-xs font-extrabold px-3 py-1 rounded-full flex items-center gap-1.5 shadow-2xs ${
+                                buffer.state === 'ACTIVE_BUFFER'
+                                  ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                                  : buffer.state === 'UPCOMING'
+                                  ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                  : buffer.state === 'STARTED'
+                                  ? 'bg-blue-100 text-blue-900 border border-blue-300'
+                                  : buffer.state === 'EXPIRED'
+                                  ? 'bg-red-100 text-red-900 border border-red-300'
+                                  : 'bg-emerald-50 text-emerald-800'
+                              }`}>
+                                {buffer.state === 'ACTIVE_BUFFER' && (
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping inline-block" />
+                                )}
+                                {buffer.state === 'UPCOMING' && <Clock className="w-3.5 h-3.5 text-amber-600" />}
+                                {buffer.state === 'STARTED' && <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />}
+                                {buffer.state === 'EXPIRED' && <Lock className="w-3.5 h-3.5 text-red-600" />}
+                                {buffer.badge}
+                              </span>
+                            )}
+
+                            <span className={`text-xs font-bold px-3 py-1 rounded-full ${
+                              currRound.round_type === 'ONLINE_TEST' ? 'bg-purple-100 text-purple-800' :
+                              currRound.round_type === 'VIRTUAL_INTERVIEW' ? 'bg-blue-100 text-blue-800' :
+                              currRound.round_type === 'OFFLINE_INTERVIEW' ? 'bg-emerald-100 text-emerald-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {currRound.round_type === 'ONLINE_TEST' ? 'Online Coding Assessment' :
+                               currRound.round_type === 'VIRTUAL_INTERVIEW' ? 'Virtual Video Interview' :
+                               currRound.round_type === 'OFFLINE_INTERVIEW' ? 'On-Campus Face-to-Face' : 'Group Assessment'}
+                            </span>
+                          </div>
                         </div>
+
+                        {/* BUFFER WINDOW CALLOUT BANNER */}
+                        {buffer && (
+                          <div className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                            buffer.state === 'ACTIVE_BUFFER'
+                              ? 'bg-gradient-to-r from-emerald-50 via-teal-50/50 to-white border-emerald-200 text-emerald-950'
+                              : buffer.state === 'UPCOMING'
+                              ? 'bg-gradient-to-r from-amber-50 to-white border-amber-200 text-amber-950'
+                              : buffer.state === 'STARTED'
+                              ? 'bg-gradient-to-r from-blue-50 to-white border-blue-200 text-blue-950'
+                              : buffer.state === 'EXPIRED'
+                              ? 'bg-gradient-to-r from-red-500/10 via-red-50 to-white border-2 border-red-300 text-red-950'
+                              : 'bg-gray-50 border-gray-200 text-gray-800'
+                          }`}>
+                            <div className="flex items-start gap-2.5">
+                              <span className={`p-1.5 rounded-lg text-white mt-0.5 flex-shrink-0 ${
+                                buffer.state === 'ACTIVE_BUFFER' ? 'bg-emerald-600' :
+                                buffer.state === 'UPCOMING' ? 'bg-amber-600' :
+                                buffer.state === 'STARTED' ? 'bg-blue-600' :
+                                buffer.state === 'EXPIRED' ? 'bg-red-600' : 'bg-gray-600'
+                              }`}>
+                                {buffer.state === 'ACTIVE_BUFFER' && <Clock className="w-4 h-4" />}
+                                {buffer.state === 'UPCOMING' && <Lock className="w-4 h-4" />}
+                                {buffer.state === 'STARTED' && <CheckCircle2 className="w-4 h-4" />}
+                                {buffer.state === 'EXPIRED' && <AlertTriangle className="w-4 h-4" />}
+                              </span>
+                              <div>
+                                <p className="text-xs font-black">
+                                  {buffer.state === 'ACTIVE_BUFFER' ? '⏱️ Entry Buffer Active — Start Assessment' :
+                                   buffer.state === 'UPCOMING' ? '🔒 Assessment Locked — Window Opens Soon' :
+                                   buffer.state === 'STARTED' ? '✅ Assessment Session In Progress' :
+                                   buffer.state === 'EXPIRED' ? '⛔ You missed the round in the given time. You cannot proceed further.' : 'Assessment Logistics'}
+                                </p>
+                                <p className="text-[11px] leading-relaxed mt-0.5 opacity-90 font-medium">
+                                  {buffer.message}
+                                </p>
+                              </div>
+                            </div>
+                            {currRound.window_start && currRound.window_end && (
+                              <div className="text-[11px] font-mono font-bold bg-white/80 px-3 py-1.5 rounded-lg border border-gray-200/80 shadow-2xs self-start sm:self-auto flex items-center gap-1.5 text-gray-700">
+                                <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                                Buffer: {new Date(currRound.window_start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – {new Date(currRound.window_end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {/* Logistics Details Grid */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
@@ -880,26 +1190,51 @@ export default function StudentDashboard() {
                             {currRound.round_type === 'VIRTUAL_INTERVIEW' ? (
                               '⚠️ Video link activates 10 minutes prior to your allocated interview slot.'
                             ) : currRound.round_type === 'ONLINE_TEST' ? (
-                              '⚠️ Please ensure your webcam & internet are stable before launching external test.'
+                              '⚠️ Please launch within your specified buffer window. Once started, you have full allocated test time.'
                             ) : (
                               '⚠️ Please report 15 minutes before slot with printed resumes and College ID.'
                             )}
                           </p>
 
                           {currRound.launch_url ? (
-                            <a
-                              href={currRound.launch_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs shadow-xs transition cursor-pointer text-white ${
-                                currRound.round_type === 'ONLINE_TEST' 
-                                  ? 'bg-purple-600 hover:bg-purple-700' 
-                                  : 'bg-blue-600 hover:bg-blue-700'
-                              }`}
-                            >
-                              <ExternalLink className="w-4 h-4" />
-                              {currRound.button_label || 'Launch Assessment / Interview'}
-                            </a>
+                            buffer && !buffer.canLaunch ? (
+                              <button
+                                type="button"
+                                onClick={() => handleLaunchRound(app, currRound)}
+                                disabled={buffer.state === 'EXPIRED'}
+                                className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs border transition ${
+                                  buffer.state === 'UPCOMING'
+                                    ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 cursor-pointer'
+                                    : 'bg-red-100 text-red-900 border border-red-300 opacity-90 cursor-not-allowed shadow-2xs'
+                                }`}
+                                title={buffer.message}
+                              >
+                                <Lock className={`w-4 h-4 ${buffer.state === 'EXPIRED' ? 'text-red-600' : 'text-amber-600'}`} />
+                                {buffer.state === 'EXPIRED' ? 'You Missed The Round — Disqualified' : buffer.buttonText}
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleLaunchRound(app, currRound)}
+                                disabled={launchingAppId === app.id}
+                                className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs shadow-md transition cursor-pointer text-white ${
+                                  currRound.round_type === 'ONLINE_TEST' 
+                                    ? 'bg-purple-600 hover:bg-purple-700 shadow-purple-200' 
+                                    : 'bg-blue-600 hover:bg-blue-700 shadow-blue-200'
+                                }`}
+                              >
+                                {launchingAppId === app.id ? (
+                                  <>
+                                    <RefreshCw className="w-4 h-4 animate-spin" /> Verifying Entry Window...
+                                  </>
+                                ) : (
+                                  <>
+                                    <ExternalLink className="w-4 h-4" />
+                                    {buffer?.buttonText || currRound.button_label || 'Launch Assessment / Interview'}
+                                  </>
+                                )}
+                              </button>
+                            )
                           ) : (
                             <span className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-500 bg-gray-100 px-4 py-2 rounded-xl">
                               <Clock className="w-3.5 h-3.5" /> Awaiting link publication
@@ -1138,6 +1473,79 @@ export default function StudentDashboard() {
                   className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-sm transition shadow-xs cursor-pointer"
                 >
                   {loading ? 'Saving Profile...' : 'Save Profile Enrichment'}
+                </button>
+              </form>
+            </div>
+
+            {/* Account Security & Password Setup Card (Option 2: Hybrid Login Support) */}
+            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs h-fit space-y-4">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                  <Lock className="w-5 h-5 text-blue-600" /> Account Security & Password
+                </h3>
+                <p className="text-xs text-gray-500 mt-1">
+                  Set or update your personal password. This allows you to log in via either Google SSO or your email & password.
+                </p>
+              </div>
+
+              {passwordSuccess && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+                  <span>{passwordSuccess}</span>
+                </div>
+              )}
+
+              {passwordError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                  <span>{passwordError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSetPassword} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">New Password</label>
+                  <div className="relative">
+                    <input
+                      type={showSecurityPwd ? "text" : "password"}
+                      required
+                      placeholder="Minimum 6 characters"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSecurityPwd(!showSecurityPwd)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none cursor-pointer"
+                    >
+                      {showSecurityPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Confirm New Password</label>
+                  <input
+                    type={showSecurityPwd ? "text" : "password"}
+                    required
+                    placeholder="Re-enter new password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+
+                <div className="p-3 bg-blue-50/70 rounded-xl border border-blue-100 text-[11px] text-blue-800">
+                  💡 <strong>Dual Login:</strong> Setting a password lets you sign in manually with email + password, while retaining instant Google SSO access.
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={savingPassword}
+                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium rounded-lg text-sm transition shadow-xs cursor-pointer"
+                >
+                  {savingPassword ? 'Updating Password...' : 'Save Account Password'}
                 </button>
               </form>
             </div>

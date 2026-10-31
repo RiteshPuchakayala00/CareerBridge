@@ -57,6 +57,10 @@ class JobRejectRequest(BaseModel):
     reason: str
 
 
+class JobDeadlineUpdateRequest(BaseModel):
+    deadline: datetime
+
+
 class JobDetailResponse(BaseModel):
     id: int
     title: str
@@ -80,6 +84,7 @@ class JobDetailResponse(BaseModel):
     is_eligible: Optional[bool] = None
     eligibility_reasons: Optional[List[str]] = None
     has_applied: Optional[bool] = None
+    is_deadline_passed: Optional[bool] = None
 
 
 # ═══════════════════════════════════════════════
@@ -172,6 +177,11 @@ def serialize_job(job: JobPosting, company: Company = None, applicant_count: int
                   is_eligible: bool = None, eligibility_reasons: list = None,
                   has_applied: bool = None) -> dict:
     """Serialize a job posting into the standard response dict."""
+    is_deadline_passed = False
+    if job.deadline:
+        deadline_aware = job.deadline.replace(tzinfo=timezone.utc) if job.deadline.tzinfo is None else job.deadline
+        is_deadline_passed = datetime.now(timezone.utc) > deadline_aware
+
     return {
         "id": job.id,
         "title": job.title,
@@ -194,6 +204,7 @@ def serialize_job(job: JobPosting, company: Company = None, applicant_count: int
         "is_eligible": is_eligible,
         "eligibility_reasons": eligibility_reasons,
         "has_applied": has_applied,
+        "is_deadline_passed": is_deadline_passed,
     }
 
 
@@ -382,6 +393,48 @@ def close_job(
 
 
 # ═══════════════════════════════════════════════
+#  5b. UPDATE Job Deadline
+# ═══════════════════════════════════════════════
+
+@router.patch("/{job_id}/deadline")
+def update_job_deadline(
+    job_id: int,
+    data: JobDeadlineUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update or extend the application deadline for a job drive."""
+    job = db.query(JobPosting).filter(JobPosting.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job posting not found")
+    
+    # Permission check: Recruiter owning the job, Coordinator, or TPO Admin
+    if current_user.role == RoleEnum.RECRUITER:
+        company = db.query(Company).filter(Company.user_id == current_user.id).first()
+        if not company or job.company_id != company.id:
+            raise HTTPException(status_code=403, detail="You do not have permission to edit this job")
+    elif current_user.role not in [RoleEnum.TPO_ADMIN, RoleEnum.DEPT_COORDINATOR]:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    job.deadline = data.deadline
+    
+    # If the job was closed or expired, and the new deadline is in the future, automatically reactivate to PUBLISHED
+    deadline_aware = data.deadline.replace(tzinfo=timezone.utc) if data.deadline.tzinfo is None else data.deadline
+    if job.status == JobStatus.CLOSED and datetime.now(timezone.utc) <= deadline_aware:
+        job.status = JobStatus.PUBLISHED
+        job.is_active = True
+        job.is_approved = True
+
+    db.commit()
+    db.refresh(job)
+    return {
+        "message": f"Application deadline updated to {job.deadline.strftime('%Y-%m-%d %H:%M')}",
+        "deadline": job.deadline.isoformat(),
+        "status": job.status.value
+    }
+
+
+# ═══════════════════════════════════════════════
 #  6. LIST ALL JOBS (All Roles)
 #     For STUDENT: includes Tier 1 eligibility badges
 # ═══════════════════════════════════════════════
@@ -560,6 +613,13 @@ def apply_to_job(
     if not job:
         raise HTTPException(status_code=404, detail="Job posting not found")
     
+    # ─── Rule 0: Mandatory Pre-Uploaded Resume ───
+    if not profile.resume_url or not profile.resume_url.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Resume required: You must upload your resume in the 'Profile Enrichment & Resume' tab before applying for any placement drive."
+        )
+
     # ─── Tier 2: Re-run full 5-rule engine ───
     is_eligible, reasons = evaluate_eligibility(profile, job, db)
     

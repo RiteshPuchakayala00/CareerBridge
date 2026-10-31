@@ -3,6 +3,10 @@ CareerBridge Seed Script
 Provisions the root TPO_ADMIN account during server deployment (Spec §2.B).
 Also seeds test data for development purposes.
 """
+import sys
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 from app.database import SessionLocal, engine, Base
 from app.models.user import User, RoleEnum
 from app.models.student import StudentProfile
@@ -82,6 +86,36 @@ if not existing_recruiter:
     print(f"✅ RECRUITER created: {recruiter_email} / recruiter123 (TechCorp)")
 else:
     print(f"ℹ️  RECRUITER exists: {recruiter_email}")
+
+# ─── 3b. Amazon RECRUITER ───
+amazon_email = "campus@amazon.com"
+existing_amazon = db.query(User).filter(User.email == amazon_email).first()
+if not existing_amazon:
+    amazon_recruiter = User(
+        email=amazon_email,
+        full_name="Amazon University Hiring",
+        hashed_password=get_password_hash("campus123"),
+        role=RoleEnum.RECRUITER,
+        is_active=True,
+        invited_by_id=tpo_admin.id
+    )
+    db.add(amazon_recruiter)
+    db.flush()
+    amazon_co = Company(
+        user_id=amazon_recruiter.id,
+        company_name="Amazon Development Centre",
+        industry="Technology & Cloud",
+        website="https://amazon.jobs",
+        description="Global technology leader in cloud computing and e-commerce"
+    )
+    db.add(amazon_co)
+    db.commit()
+    print(f"✅ RECRUITER created: {amazon_email} / campus123 (Amazon)")
+else:
+    existing_amazon.hashed_password = get_password_hash("campus123")
+    existing_amazon.is_active = True
+    db.commit()
+    print(f"ℹ️  RECRUITER updated: {amazon_email} / campus123")
 
 # ─── 4. Test STUDENTS ───
 test_students = [

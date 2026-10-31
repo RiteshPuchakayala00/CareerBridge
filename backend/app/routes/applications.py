@@ -23,10 +23,13 @@ router = APIRouter(prefix="/api/applications", tags=["Applications & Shortlistin
 student_required = require_role([RoleEnum.STUDENT])
 
 
+from datetime import datetime, timezone, timedelta
+
 def serialize_application_tracker(app: Application, job: JobPosting, company: Optional[Company], db: Session):
     """
     Serializes application with rich dynamic round pipeline info,
-    scheduled slot, test/meeting link delivery, and countdown unlock logic.
+    scheduled slot, test/meeting link delivery, buffer entry window gating,
+    and countdown unlock/expiry logic.
     """
     # Fetch all rounds configured for this drive
     all_rounds = db.query(JobRound).filter(
@@ -41,31 +44,103 @@ def serialize_application_tracker(app: Application, job: JobPosting, company: Op
         # If candidate has not been assigned a specific round yet, default to Round 1
         curr_round = all_rounds[0]
 
-    # Compute launch action / countdown for active round
+    # Compute buffer window / launch action / countdown for active round
     launch_info = None
     if curr_round and app.status not in [AppStatus.REJECTED, AppStatus.OFFERED]:
         now = datetime.now(timezone.utc)
+        
         start_time_aware = None
         if curr_round.start_time:
             start_time_aware = curr_round.start_time.replace(tzinfo=timezone.utc) if curr_round.start_time.tzinfo is None else curr_round.start_time
+
+        end_time_aware = None
+        if curr_round.end_time:
+            end_time_aware = curr_round.end_time.replace(tzinfo=timezone.utc) if curr_round.end_time.tzinfo is None else curr_round.end_time
 
         slot_aware = None
         if app.scheduled_slot:
             slot_aware = app.scheduled_slot.replace(tzinfo=timezone.utc) if app.scheduled_slot.tzinfo is None else app.scheduled_slot
 
-        # Reference time is candidate's slot or round start time
-        ref_time = slot_aware or start_time_aware
-        countdown_seconds = 0
-        is_unlocked = True
+        # If individual candidate has a slot (e.g. for virtual interview):
+        # Buffer window: Join between 10 mins before slot and 20 mins after slot
+        if slot_aware:
+            window_start = slot_aware - timedelta(minutes=10)
+            window_end = slot_aware + timedelta(minutes=20)
+        else:
+            window_start = start_time_aware
+            window_end = end_time_aware
 
-        if ref_time:
-            diff = (ref_time - now).total_seconds()
-            countdown_seconds = max(0, int(diff))
-            # Virtual interviews unlock 10 minutes (600s) before slot
-            if curr_round.round_type.value == "VIRTUAL_INTERVIEW":
-                is_unlocked = diff <= 600
-            elif curr_round.round_type.value == "ONLINE_TEST":
-                is_unlocked = diff <= 0 or (curr_round.end_time and now <= curr_round.end_time.replace(tzinfo=timezone.utc) if curr_round.end_time.tzinfo is None else True)
+        has_started = app.round_started_at is not None
+        window_state = "NO_RESTRICTION"
+        countdown_seconds = 0
+        window_remaining_seconds = 0
+        is_unlocked = True
+        status_badge = "Available"
+        status_message = "You can enter or launch this round."
+
+        if window_start and window_end:
+            if has_started:
+                window_state = "STARTED"
+                is_unlocked = True
+                status_badge = "Attempt in Progress"
+                status_message = f"Started at {app.round_started_at.strftime('%I:%M %p')}."
+            elif now < window_start:
+                window_state = "UPCOMING"
+                is_unlocked = False
+                diff = (window_start - now).total_seconds()
+                countdown_seconds = max(0, int(diff))
+                status_badge = "Window Opens Soon"
+                status_message = f"Entry window: {window_start.strftime('%I:%M %p')} to {window_end.strftime('%I:%M %p')}. Must start during this window."
+            elif window_start <= now <= window_end:
+                window_state = "ACTIVE_BUFFER"
+                is_unlocked = True
+                rem = (window_end - now).total_seconds()
+                window_remaining_seconds = max(0, int(rem))
+                status_badge = "Entry Window Open"
+                rem_mins = int(rem // 60)
+                rem_secs = int(rem % 60)
+                status_message = f"Buffer Active: Must start before {window_end.strftime('%I:%M %p')} ({rem_mins}m {rem_secs}s left to begin)."
+            else:
+                window_state = "EXPIRED"
+                is_unlocked = False
+                status_badge = "Missed Round (Disqualified)"
+                status_message = f"You missed Round {curr_round.round_number} ({curr_round.name}). The entry buffer closed at {window_end.strftime('%I:%M %p')}. You did not attend in the given time and cannot proceed further."
+                if app.status not in [AppStatus.REJECTED, AppStatus.OFFERED]:
+                    app.status = AppStatus.REJECTED
+                    app.rejection_round_number = curr_round.round_number
+                    app.rejection_reason = f"You missed {curr_round.name} (Round {curr_round.round_number}). The entry buffer window closed at {window_end.strftime('%I:%M %p')}. Since you did not attend in the given time, you cannot proceed further."
+                    db.commit()
+        elif window_start and not window_end:
+            if now < window_start:
+                window_state = "UPCOMING"
+                is_unlocked = False
+                diff = (window_start - now).total_seconds()
+                countdown_seconds = max(0, int(diff))
+                status_badge = "Starts Soon"
+                status_message = f"Round starts at {window_start.strftime('%I:%M %p')}."
+            else:
+                window_state = "ACTIVE_BUFFER"
+                is_unlocked = True
+                status_badge = "Active"
+                status_message = "Round is currently in progress."
+        elif not window_start and window_end:
+            if now > window_end and not has_started:
+                window_state = "EXPIRED"
+                is_unlocked = False
+                status_badge = "Missed Round (Disqualified)"
+                status_message = f"You missed Round {curr_round.round_number} ({curr_round.name}). The entry deadline was {window_end.strftime('%I:%M %p')}. You did not attend in the given time and cannot proceed further."
+                if app.status not in [AppStatus.REJECTED, AppStatus.OFFERED]:
+                    app.status = AppStatus.REJECTED
+                    app.rejection_round_number = curr_round.round_number
+                    app.rejection_reason = f"You missed {curr_round.name} (Round {curr_round.round_number}). The entry deadline was {window_end.strftime('%I:%M %p')}. Since you did not attend in the given time, you cannot proceed further."
+                    db.commit()
+            else:
+                window_state = "ACTIVE_BUFFER"
+                is_unlocked = True
+                rem = (window_end - now).total_seconds()
+                window_remaining_seconds = max(0, int(rem))
+                status_badge = "Open"
+                status_message = f"Must start before {window_end.strftime('%I:%M %p')}."
 
         launch_url = curr_round.test_url or curr_round.meeting_url
         button_label = "Launch Test" if curr_round.round_type.value == "ONLINE_TEST" else (
@@ -85,9 +160,16 @@ def serialize_application_tracker(app: Application, job: JobPosting, company: Op
             "start_time": curr_round.start_time.isoformat() if curr_round.start_time else None,
             "end_time": curr_round.end_time.isoformat() if curr_round.end_time else None,
             "scheduled_slot": app.scheduled_slot.isoformat() if app.scheduled_slot else None,
+            "round_started_at": app.round_started_at.isoformat() if app.round_started_at else None,
+            "window_start": window_start.isoformat() if window_start else None,
+            "window_end": window_end.isoformat() if window_end else None,
+            "window_state": window_state,
+            "status_badge": status_badge,
+            "status_message": status_message,
             "launch_url": launch_url,
             "button_label": button_label,
             "countdown_seconds": countdown_seconds,
+            "window_remaining_seconds": window_remaining_seconds,
             "is_unlocked": is_unlocked
         }
 
@@ -164,3 +246,98 @@ def get_my_applications(
         serialize_application_tracker(app, job, company, db)
         for app, job, company in apps
     ]
+
+
+@router.post("/{application_id}/launch")
+def launch_application_round(
+    application_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(student_required)
+):
+    """
+    Called when student launches test/interview.
+    Validates entry buffer window (e.g. 1 PM to 2 PM).
+    Records round_started_at timestamp so attempt is recognized.
+    """
+    profile = db.query(StudentProfile).filter(StudentProfile.user_id == current_user.id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Student profile not found.")
+        
+    app = db.query(Application).filter(
+        Application.id == application_id,
+        Application.student_id == profile.id
+    ).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found.")
+        
+    if app.status == AppStatus.REJECTED:
+        raise HTTPException(
+            status_code=400,
+            detail=app.rejection_reason or "You have been disqualified from this recruitment drive and cannot proceed further."
+        )
+    if app.status == AppStatus.OFFERED:
+        raise HTTPException(status_code=400, detail="Official offer already extended for this drive.")
+        
+    curr_round = db.query(JobRound).filter(JobRound.id == app.current_round_id).first()
+    if not curr_round:
+        curr_round = db.query(JobRound).filter(JobRound.job_id == app.job_id, JobRound.round_number == 1).first()
+        if not curr_round:
+            raise HTTPException(status_code=400, detail="No active round configured for this drive.")
+
+    now = datetime.now(timezone.utc)
+    
+    start_time_aware = None
+    if curr_round.start_time:
+        start_time_aware = curr_round.start_time.replace(tzinfo=timezone.utc) if curr_round.start_time.tzinfo is None else curr_round.start_time
+
+    end_time_aware = None
+    if curr_round.end_time:
+        end_time_aware = curr_round.end_time.replace(tzinfo=timezone.utc) if curr_round.end_time.tzinfo is None else curr_round.end_time
+
+    slot_aware = None
+    if app.scheduled_slot:
+        slot_aware = app.scheduled_slot.replace(tzinfo=timezone.utc) if app.scheduled_slot.tzinfo is None else app.scheduled_slot
+
+    if slot_aware:
+        window_start = slot_aware - timedelta(minutes=10)
+        window_end = slot_aware + timedelta(minutes=20)
+    else:
+        window_start = start_time_aware
+        window_end = end_time_aware
+
+    # If already started, allow re-launching URL anytime
+    if app.round_started_at:
+        launch_url = curr_round.test_url or curr_round.meeting_url
+        return {
+            "message": "Continuing active attempt",
+            "launch_url": launch_url,
+            "round_started_at": app.round_started_at.isoformat()
+        }
+
+    # Verify start window
+    if window_start and now < window_start:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Entry window opens at {window_start.strftime('%I:%M %p')}. You cannot start before the window opens."
+        )
+
+    if window_end and now > window_end:
+        if app.status not in [AppStatus.REJECTED, AppStatus.OFFERED]:
+            app.status = AppStatus.REJECTED
+            app.rejection_round_number = curr_round.round_number
+            app.rejection_reason = f"You missed {curr_round.name} (Round {curr_round.round_number}). The entry buffer closed at {window_end.strftime('%I:%M %p')}. Since you did not attend in the given time, you cannot proceed further."
+            db.commit()
+        raise HTTPException(
+            status_code=400,
+            detail=f"You missed Round {curr_round.round_number} ({curr_round.name}). The entry buffer closed at {window_end.strftime('%I:%M %p')}. You did not attend in the given time and cannot proceed further."
+        )
+
+    app.round_started_at = now
+    db.commit()
+
+    launch_url = curr_round.test_url or curr_round.meeting_url
+    return {
+        "message": "Round launched successfully within entry buffer window",
+        "launch_url": launch_url,
+        "round_started_at": app.round_started_at.isoformat()
+    }

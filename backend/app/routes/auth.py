@@ -31,7 +31,7 @@ def _issue_jwt(user: User) -> dict:
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     role_value = user.role.value if isinstance(user.role, RoleEnum) else user.role
     access_token = create_access_token(
-        data={"sub": user.email, "role": role_value},
+        data={"sub": user.email.strip().lower(), "role": role_value},
         expires_delta=access_token_expires
     )
     return {
@@ -48,7 +48,9 @@ def _issue_jwt(user: User) -> dict:
 
 @router.post("/login", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == form_data.username).first()
+    from sqlalchemy import func
+    login_identifier = form_data.username.strip().lower()
+    user = db.query(User).filter(func.lower(User.email) == login_identifier).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -63,11 +65,12 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             detail="Your account has been deactivated. Contact the TPO Admin."
         )
     
-    # For SSO-only users (no password set)
+    # Option 2: If no custom password has been set yet, prompt to sign in with Google or use Set Password
     if user.hashed_password is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="This account uses Google SSO. Please sign in with your College Google ID."
+            detail="No password has been set for this account yet. Please sign in with Google or click 'Set / Reset Password' to create your password.",
+            headers={"WWW-Authenticate": "Bearer"},
         )
     
     if not verify_password(form_data.password, user.hashed_password):
@@ -77,6 +80,24 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    # Enforce BatchEligibility for Students (consistent with Google SSO)
+    if user.role == RoleEnum.STUDENT:
+        student_profile = db.query(StudentProfile).filter(StudentProfile.user_id == user.id).first()
+        if student_profile and student_profile.graduation_year:
+            batch = db.query(BatchEligibility).filter(
+                BatchEligibility.graduation_year == student_profile.graduation_year
+            ).first()
+            if not batch:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Placement registration is currently restricted. The {student_profile.graduation_year} batch has not been activated. Please contact the TPO."
+                )
+            if not batch.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Placement portal is currently closed for the {student_profile.graduation_year} batch. Please contact the TPO."
+                )
+
     return _issue_jwt(user)
 
 
@@ -236,3 +257,95 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UserResponse)
 def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+# ═══════════════════════════════════════════════
+# 5. Password Management (Change & Reset Password)
+# ═══════════════════════════════════════════════
+
+class ChangePasswordRequest(BaseModel):
+    old_password: Optional[str] = None
+    new_password: str
+
+class ResetPasswordRequest(BaseModel):
+    email: str
+    new_password: str
+    old_password: Optional[str] = None
+
+@router.post("/change-password")
+def change_password(
+    data: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Allows any logged-in user to set or update their password."""
+    if len(data.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
+    
+    if current_user.hashed_password is not None and data.old_password:
+        if not verify_password(data.old_password, current_user.hashed_password):
+            raise HTTPException(status_code=400, detail="Current password does not match.")
+    
+    current_user.hashed_password = get_password_hash(data.new_password)
+    db.commit()
+    return {"message": "Password updated successfully. You can now use it to sign in."}
+
+
+@router.post("/reset-password")
+def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """
+    Set initial password or reset password for an existing account in the placement roster.
+    Enforces authorization:
+    - Root TPO Admin accounts cannot be reset via public self-service.
+    - Deactivated accounts are rejected.
+    - For students, batch eligibility must be active.
+    - If account already has a password, verifies old_password if supplied.
+    """
+    from sqlalchemy import func
+    normalized_email = data.email.strip().lower()
+    user = db.query(User).filter(func.lower(User.email) == normalized_email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found with this email in the placement roster."
+        )
+    
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account has been deactivated. Please contact the TPO Admin."
+        )
+    
+    # Root TPO Admin credentials must not be reset via unauthenticated public endpoints
+    if user.role == RoleEnum.TPO_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="TPO Admin credentials cannot be reset through self-service for security reasons. Please contact the system administrator."
+        )
+
+    # For students, enforce dynamic batch eligibility
+    if user.role == RoleEnum.STUDENT:
+        student_profile = db.query(StudentProfile).filter(StudentProfile.user_id == user.id).first()
+        if student_profile and student_profile.graduation_year:
+            batch = db.query(BatchEligibility).filter(
+                BatchEligibility.graduation_year == student_profile.graduation_year
+            ).first()
+            if not batch or not batch.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Placement portal is currently closed for the {student_profile.graduation_year} batch. Please contact the TPO."
+                )
+
+    if len(data.new_password) < 6:
+        raise HTTPException(status_code=400, detail="New password must be at least 6 characters.")
+    
+    # If the user already has an established password and provided old_password, verify it
+    if user.hashed_password is not None and data.old_password:
+        if not verify_password(data.old_password, user.hashed_password):
+            raise HTTPException(status_code=400, detail="Current password does not match.")
+
+    user.hashed_password = get_password_hash(data.new_password)
+    db.commit()
+    return {"message": f"Password for {user.email} has been updated. You can now log in with your new password."}
+
+

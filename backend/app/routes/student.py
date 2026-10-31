@@ -3,6 +3,7 @@ Student Routes — Enrolled Student Operations
 Spec Reference: Section 5 (Role 4 — STUDENT)
 """
 import os
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List
@@ -203,6 +204,15 @@ def browse_jobs(
                 f"Under college placement policy, placed students cannot participate in further drives."
             )
         
+        # Rule 2: Application Deadline Check
+        is_deadline_passed = False
+        if job.deadline:
+            deadline_aware = job.deadline.replace(tzinfo=timezone.utc) if job.deadline.tzinfo is None else job.deadline
+            if datetime.now(timezone.utc) > deadline_aware:
+                is_deadline_passed = True
+                is_eligible = False
+                reasons.append(f"Application deadline expired on {job.deadline.strftime('%b %d, %Y at %I:%M %p')}")
+
         # Batch drive-type check (Spec §4 & §5.B.1)
         if is_eligible:
             is_internship = "intern" in (job.job_type or "").lower()
@@ -247,7 +257,8 @@ def browse_jobs(
             drive_date=job.drive_date,
             is_eligible=is_eligible,
             ineligibility_reason="; ".join(reasons) if reasons else None,
-            has_applied=job.id in applied_job_ids
+            has_applied=job.id in applied_job_ids,
+            is_deadline_passed=is_deadline_passed
         ))
     
     return results

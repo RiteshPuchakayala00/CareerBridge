@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     COLLEGE_DOMAIN: str = "college.edu"     # Institutional Google Workspace domain
     
     UPLOAD_DIR: str = "./uploads"
+    ALLOWED_ORIGINS: Optional[str] = None  # Comma-separated domains or "*"
 
     class Config:
         env_file = ".env"

@@ -124,10 +124,12 @@ def list_department_students(
     if not current_user.department:
         raise HTTPException(status_code=400, detail="No department bound to your account")
     
+    from sqlalchemy import func
+    coord_dept = current_user.department.strip().upper()
     query = db.query(StudentProfile, User).join(
         User, StudentProfile.user_id == User.id
     ).filter(
-        StudentProfile.department == current_user.department  # BRANCH ISOLATION
+        func.upper(StudentProfile.department) == coord_dept  # STRICT BRANCH ISOLATION
     )
     
     if placed is not None:
@@ -204,7 +206,7 @@ def list_department_drives(
     current_user: User = Depends(coordinator_required)
 ):
     """List drives relevant to the coordinator's department."""
-    dept = current_user.department
+    dept = (current_user.department or "").strip().upper()
     jobs = db.query(JobPosting, Company).outerjoin(
         Company, JobPosting.company_id == Company.id
     ).all()
@@ -212,7 +214,7 @@ def list_department_drives(
     # Filter jobs where the coordinator's dept is in the eligible list
     relevant = []
     for j, c in jobs:
-        depts = j.eligible_departments or []
+        depts = [d.strip().upper() for d in (j.eligible_departments or []) if d]
         if dept in depts or not depts:
             relevant.append({
                 "id": j.id,

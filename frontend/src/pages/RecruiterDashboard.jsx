@@ -32,6 +32,9 @@ export default function RecruiterDashboard() {
   const [showRoundsConfigModal, setShowRoundsConfigModal] = useState(false);
   const [showLogisticsModal, setShowLogisticsModal] = useState(false);
   const [selectedRoundForLogistics, setSelectedRoundForLogistics] = useState(null);
+  const [showDeadlineModal, setShowDeadlineModal] = useState(false);
+  const [newDeadlineDate, setNewDeadlineDate] = useState('');
+  const [updatingDeadline, setUpdatingDeadline] = useState(false);
 
   // Next round logistics inside shortlist modal
   const [nextRoundLogistics, setNextRoundLogistics] = useState({
@@ -393,6 +396,25 @@ export default function RecruiterDashboard() {
     }
   };
 
+  // Handle Update / Extend Application Deadline
+  const handleSaveDeadline = async (e) => {
+    e.preventDefault();
+    if (!selectedJobId || !newDeadlineDate) return;
+    setUpdatingDeadline(true);
+    try {
+      const res = await api.patch(`/jobs/${selectedJobId}/deadline`, {
+        deadline: new Date(newDeadlineDate).toISOString()
+      });
+      showNotification(res.data.message || "Application deadline updated successfully");
+      setShowDeadlineModal(false);
+      fetchJobs();
+    } catch (err) {
+      showNotification(err.response?.data?.detail || "Failed to update deadline", true);
+    } finally {
+      setUpdatingDeadline(false);
+    }
+  };
+
   // Determine current active round for publishing
   const selectedApplicants = applicants.filter(a => selectedAppIds.includes(a.application_id));
   const candidateRoundNumber = selectedApplicants.length > 0 
@@ -618,6 +640,13 @@ export default function RecruiterDashboard() {
                           {j.applicant_count} Applicants
                         </span>
                       </div>
+                      <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-[11px]">
+                        <span className="text-gray-400">Deadline:</span>
+                        <span className={`font-semibold ${j.deadline && new Date(j.deadline) < new Date() ? 'text-red-600 font-bold' : 'text-gray-700'}`}>
+                          {j.deadline ? new Date(j.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'None'}
+                          {j.deadline && new Date(j.deadline) < new Date() ? ' (Expired)' : ''}
+                        </span>
+                      </div>
                     </button>
                   ))}
                   {jobs.length === 0 && (
@@ -643,12 +672,35 @@ export default function RecruiterDashboard() {
                       </p>
                     </div>
 
-                    <button
-                      onClick={() => setShowRoundsConfigModal(true)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition cursor-pointer self-start sm:self-auto"
-                    >
-                      <Settings className="w-3.5 h-3.5 text-amber-600" /> Configure Round Pipeline
-                    </button>
+                    <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                      <button
+                        onClick={() => {
+                          const currentJob = jobs.find(j => j.id === selectedJobId);
+                          if (currentJob?.deadline) {
+                            const d = new Date(currentJob.deadline);
+                            const localIso = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                            setNewDeadlineDate(localIso);
+                          } else {
+                            setNewDeadlineDate('');
+                          }
+                          setShowDeadlineModal(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition cursor-pointer"
+                      >
+                        <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                        Deadline: {jobs.find(j => j.id === selectedJobId)?.deadline ? new Date(jobs.find(j => j.id === selectedJobId).deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Set'}
+                        {jobs.find(j => j.id === selectedJobId)?.deadline && new Date(jobs.find(j => j.id === selectedJobId).deadline) < new Date() && (
+                          <span className="text-[10px] text-red-600 font-extrabold ml-1">Expired</span>
+                        )}
+                      </button>
+
+                      <button
+                        onClick={() => setShowRoundsConfigModal(true)}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition cursor-pointer"
+                      >
+                        <Settings className="w-3.5 h-3.5 text-amber-600" /> Configure Round Pipeline
+                      </button>
+                    </div>
                   </div>
 
                   {/* Sequential Rounds Pills */}
@@ -1719,6 +1771,40 @@ export default function RecruiterDashboard() {
                       </div>
                     )}
 
+                    {/* Buffer Window Settings */}
+                    <div className="grid grid-cols-2 gap-2 p-2.5 bg-gray-50 rounded-lg border border-gray-200">
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-600 mb-1">
+                          Buffer Start (Window Opens)
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={rnd.start_time || ''}
+                          onChange={(e) => {
+                            const updated = [...pipelineRounds];
+                            updated[idx].start_time = e.target.value;
+                            setPipelineRounds(updated);
+                          }}
+                          className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-white outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-600 mb-1">
+                          Buffer Deadline (Window Closes)
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={rnd.end_time || ''}
+                          onChange={(e) => {
+                            const updated = [...pipelineRounds];
+                            updated[idx].end_time = e.target.value;
+                            setPipelineRounds(updated);
+                          }}
+                          className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-white outline-none"
+                        />
+                      </div>
+                    </div>
+
                     <div>
                       <label className="block text-[11px] font-bold text-gray-700 mb-1">Instructions / Description</label>
                       <input
@@ -1848,25 +1934,46 @@ export default function RecruiterDashboard() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Start Time</label>
-                  <input
-                    type="datetime-local"
-                    value={selectedRoundForLogistics.start_time ? selectedRoundForLogistics.start_time.slice(0, 16) : ''}
-                    onChange={(e) => setSelectedRoundForLogistics({ ...selectedRoundForLogistics, start_time: e.target.value })}
-                    className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg outline-none"
-                  />
+              {/* Buffer Window Settings */}
+              <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 space-y-2">
+                <div className="flex items-center gap-1.5 text-blue-900 font-extrabold text-xs">
+                  <Clock className="w-3.5 h-3.5 text-blue-600" />
+                  Candidate Start Buffer Window
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Passkey / Access PIN</label>
-                  <input
-                    type="text"
-                    value={selectedRoundForLogistics.access_code || ''}
-                    onChange={(e) => setSelectedRoundForLogistics({ ...selectedRoundForLogistics, access_code: e.target.value })}
-                    className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg outline-none font-mono"
-                  />
+                <p className="text-[11px] text-blue-700 leading-relaxed">
+                  Define the time range (e.g. 1:00 PM to 2:00 PM). Candidates must start the test/interview during this buffer. Once started, they are granted full test time to finish.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 mb-1">Window Opens (Buffer Start)</label>
+                    <input
+                      type="datetime-local"
+                      value={selectedRoundForLogistics.start_time ? selectedRoundForLogistics.start_time.slice(0, 16) : ''}
+                      onChange={(e) => setSelectedRoundForLogistics({ ...selectedRoundForLogistics, start_time: e.target.value })}
+                      className="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg outline-none bg-white focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 mb-1">Window Closes (Entry Deadline)</label>
+                    <input
+                      type="datetime-local"
+                      value={selectedRoundForLogistics.end_time ? selectedRoundForLogistics.end_time.slice(0, 16) : ''}
+                      onChange={(e) => setSelectedRoundForLogistics({ ...selectedRoundForLogistics, end_time: e.target.value })}
+                      className="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg outline-none bg-white focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Passkey / Access PIN</label>
+                <input
+                  type="text"
+                  value={selectedRoundForLogistics.access_code || ''}
+                  onChange={(e) => setSelectedRoundForLogistics({ ...selectedRoundForLogistics, access_code: e.target.value })}
+                  placeholder="e.g. CB@2026 or PIN-4482"
+                  className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg outline-none font-mono"
+                />
               </div>
 
               <div>
@@ -1893,6 +2000,73 @@ export default function RecruiterDashboard() {
                   className="px-5 py-2 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-lg shadow-xs cursor-pointer"
                 >
                   {loading ? 'Saving...' : 'Save Logistics'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Update Application Deadline */}
+      {showDeadlineModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-blue-600" />
+                <h3 className="text-base font-extrabold text-gray-900">Manage Application Deadline</h3>
+              </div>
+              <button
+                onClick={() => setShowDeadlineModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-600 leading-relaxed">
+              Set or extend the application cutoff deadline for{' '}
+              <strong className="text-gray-900">{jobs.find(j => j.id === selectedJobId)?.title}</strong>.
+              Students viewing this job will be marked as ineligible if this deadline has expired.
+            </p>
+
+            <form onSubmit={handleSaveDeadline} className="space-y-4 pt-1">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Cutoff Date & Time (Deadline)
+                </label>
+                <input
+                  type="datetime-local"
+                  required
+                  value={newDeadlineDate}
+                  onChange={(e) => setNewDeadlineDate(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-xs text-blue-900 space-y-1">
+                <p className="font-semibold flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-blue-600" /> Automated Enforcement:
+                </p>
+                <p className="text-[11px] text-blue-800">
+                  Once this deadline is reached, students will be automatically marked as ineligible with a "Deadline Expired" badge, and 1-Click Apply will be locked.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowDeadlineModal(false)}
+                  className="px-4 py-2 text-xs font-bold text-gray-600 hover:text-gray-800 rounded-lg cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updatingDeadline || !newDeadlineDate}
+                  className="px-5 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  {updatingDeadline ? 'Saving...' : 'Save Deadline'}
                 </button>
               </div>
             </form>

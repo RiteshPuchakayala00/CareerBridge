@@ -48,10 +48,11 @@ def appoint_coordinator(
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered in the system")
     
+    raw_pwd = getattr(data, 'password', None)
     coordinator = User(
         email=data.email,
         full_name=data.full_name,
-        hashed_password=None,  # Zero password — uses Google SSO
+        hashed_password=get_password_hash(raw_pwd) if raw_pwd else None,
         role=RoleEnum.DEPT_COORDINATOR,
         department=data.department.upper(),
         is_active=True,
@@ -244,7 +245,7 @@ async def upload_student_roster(
 
     for row_num, row in enumerate(csv_reader, start=2):
         try:
-            email = row.get("email", "").strip()
+            email = row.get("email", "").strip().lower()
             full_name = row.get("full_name", row.get("student_name", "")).strip()
             roll_number = row.get("roll_no", row.get("roll_number", "")).strip()
             department = row.get("department", "").strip().upper()
@@ -256,15 +257,16 @@ async def upload_student_roster(
                 errors.append(f"Row {row_num}: Missing email or full_name")
                 continue
 
-            if db.query(User).filter(User.email == email).first():
+            if db.query(User).filter(sql_func.lower(User.email) == email).first():
                 errors.append(f"Row {row_num}: Email {email} already exists")
                 continue
 
-            # Create User (no password — SSO only)
+            # Create User (hybrid: supports both Email+Password and Google SSO)
+            pwd = row.get("password", "").strip()
             new_user = User(
                 email=email,
                 full_name=full_name,
-                hashed_password=None,
+                hashed_password=get_password_hash(pwd) if pwd else None,
                 role=RoleEnum.STUDENT,
                 department=department if department else None,
                 is_active=True
@@ -552,3 +554,27 @@ def add_tpo_staff(
     db.commit()
     db.refresh(new_staff)
     return {"message": f"TPO staff {full_name} added successfully", "id": new_staff.id}
+
+
+@router.post("/users/{user_id}/reset-password")
+def admin_reset_user_password(
+    user_id: int,
+    new_password: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(tpo_required)
+):
+    """
+    Authoritative administrative password reset for students, coordinators, or recruiters.
+    Only callable by authenticated TPO_ADMIN.
+    """
+    if len(new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
+    
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    target_user.hashed_password = get_password_hash(new_password)
+    db.commit()
+    return {"message": f"Password for {target_user.email} ({target_user.full_name}) successfully reset by Admin."}
+
