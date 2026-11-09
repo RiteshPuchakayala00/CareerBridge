@@ -36,11 +36,13 @@ def _issue_jwt(user: User) -> dict:
         data={"sub": user.email.strip().lower(), "role": role_value},
         expires_delta=access_token_expires
     )
+    has_password = bool(user.hashed_password and len(user.hashed_password.strip()) > 0)
     return {
         "access_token": access_token,
         "token_type": "bearer",
         "role": role_value,
-        "full_name": user.full_name
+        "full_name": user.full_name,
+        "needs_password_setup": not has_password
     }
 
 
@@ -276,6 +278,24 @@ class ResetPasswordRequest(BaseModel):
     email: str
     otp_code: str
     new_password: str
+
+class SetInitialPasswordRequest(BaseModel):
+    password: str
+
+@router.post("/set-initial-password")
+def set_initial_password(
+    data: SetInitialPasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Sets initial password for a user logged in via Google SSO."""
+    if len(data.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
+    
+    current_user.hashed_password = get_password_hash(data.password)
+    db.commit()
+    return {"message": "Password successfully created! You can now log in with your email and password."}
+
 
 @router.post("/change-password")
 def change_password(

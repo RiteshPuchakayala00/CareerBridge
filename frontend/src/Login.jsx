@@ -29,10 +29,16 @@ export default function Login() {
 
   const navigate = useNavigate();
 
-  const storeAndRedirect = ({ access_token, role, full_name }) => {
+  const storeAndRedirect = ({ access_token, role, full_name, needs_password_setup }) => {
     localStorage.setItem('token', access_token);
     localStorage.setItem('role', role);
     localStorage.setItem('user_name', full_name || '');
+    if (needs_password_setup) {
+      localStorage.setItem('needs_password_setup', 'true');
+      sessionStorage.removeItem('dismissed_password_setup');
+    } else {
+      localStorage.removeItem('needs_password_setup');
+    }
     setSuccess(true);
     setTimeout(() => {
       if (role === 'TPO_ADMIN') navigate('/tpo');
@@ -197,9 +203,6 @@ export default function Login() {
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="block text-xs font-semibold text-gray-700 uppercase">Password</label>
-              <Link to="/forgot-password" className="text-xs font-medium text-blue-600 hover:text-blue-500">
-                Forgot Password?
-              </Link>
             </div>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -221,9 +224,6 @@ export default function Login() {
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
-            <p className="text-[11px] text-gray-500 mt-1">
-              Students & faculty can sign in instantly with Google above. If locked out, use <Link to="/forgot-password" className="text-blue-600 font-semibold hover:underline">Forgot Password</Link>.
-            </p>
           </div>
 
           <button

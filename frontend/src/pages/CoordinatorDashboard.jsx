@@ -752,7 +752,7 @@ export default function CoordinatorDashboard() {
           <div className="max-w-xl mx-auto bg-white p-6 rounded-2xl border border-gray-200 shadow-xs">
             <h3 className="text-lg font-bold text-gray-900 mb-1">Company Outreach: Invite Corporate Recruiter</h3>
             <p className="text-xs text-gray-500 mb-4">
-              Invite company HR directly to hire from {boundDepartment}. Automated anti-abuse blocks public domains (@gmail, @yahoo).
+              Invite company HR directly to hire from {boundDepartment}. Any valid corporate or direct email address is accepted.
             </p>
             <form onSubmit={handleInviteRecruiter} className="space-y-4">
               <div>

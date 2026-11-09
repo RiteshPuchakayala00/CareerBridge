@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { LogOut, Shield, Award, Briefcase, GraduationCap } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 import FlashAnnouncementBanner from './FlashAnnouncementBanner';
+import SetPasswordModal from './SetPasswordModal';
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -51,6 +52,9 @@ export default function Navbar() {
     <div className="sticky top-0 z-40">
       {/* High-Visibility Sticky Urgent Flash Announcement Banner */}
       <FlashAnnouncementBanner />
+
+      {/* First-Time Google SSO Manual Password Setup Modal */}
+      <SetPasswordModal />
 
       <header className="bg-white border-b border-gray-200 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

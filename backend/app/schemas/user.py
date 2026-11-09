@@ -28,6 +28,7 @@ class Token(BaseModel):
     token_type: str
     role: str
     full_name: str
+    needs_password_setup: bool = False
 
 class TokenData(BaseModel):
     email: Optional[str] = None

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import api from '../api';
-import { 
-  Users, Award, Calendar, UploadCloud, Briefcase, Mail, CheckCircle2, 
+import {
+  Users, Award, Calendar, UploadCloud, Briefcase, Mail, CheckCircle2,
   AlertCircle, ShieldCheck, UserX, UserCheck, TrendingUp, DollarSign,
   Search, Filter, ExternalLink, RefreshCw, FileText, Edit2, Check, X,
   ToggleLeft, ToggleRight, Megaphone, Copy, Link2
@@ -23,16 +23,16 @@ export default function TpoDashboard() {
 
   // Appoint Coordinator Form State
   const [coordForm, setCoordForm] = useState({ full_name: '', email: '', department: 'CSE' });
-  
+
   // Recruiter Invite Form State
   const [inviteForm, setInviteForm] = useState({ company_name: '', email: '' });
   const [newInviteLink, setNewInviteLink] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
-  
+
   // CSV Upload State
   const [csvFile, setCsvFile] = useState(null);
   const [uploadResult, setUploadResult] = useState(null);
-  
+
   // Student Filters
   const [studentSearch, setStudentSearch] = useState('');
   const [selectedDept, setSelectedDept] = useState('');
@@ -242,7 +242,7 @@ export default function TpoDashboard() {
     }
   };
 
-  const filteredStudents = students.filter(s => 
+  const filteredStudents = students.filter(s =>
     s.full_name?.toLowerCase().includes(studentSearch.toLowerCase()) ||
     s.email?.toLowerCase().includes(studentSearch.toLowerCase()) ||
     s.roll_number?.toLowerCase().includes(studentSearch.toLowerCase())
@@ -266,7 +266,7 @@ export default function TpoDashboard() {
               Manage college-wide placements, department SPOCs, recruiter access, and accreditation reports.
             </p>
           </div>
-          <button 
+          <button
             onClick={() => {
               fetchAnalytics();
               fetchCoordinators();
@@ -312,11 +312,10 @@ export default function TpoDashboard() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 py-2.5 px-3.5 text-sm font-medium rounded-lg whitespace-nowrap transition-all ${
-                  isActive 
-                    ? 'bg-purple-600 text-white shadow-xs' 
+                className={`flex items-center gap-2 py-2.5 px-3.5 text-sm font-medium rounded-lg whitespace-nowrap transition-all ${isActive
+                    ? 'bg-purple-600 text-white shadow-xs'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
+                  }`}
               >
                 <Icon className="w-4 h-4" />
                 {tab.label}
@@ -378,8 +377,8 @@ export default function TpoDashboard() {
                         <td className="px-6 py-4 font-semibold text-gray-900">{stat.percentage}%</td>
                         <td className="px-6 py-4 w-48">
                           <div className="w-full bg-gray-100 rounded-full h-2.5">
-                            <div 
-                              className="bg-emerald-500 h-2.5 rounded-full" 
+                            <div
+                              className="bg-emerald-500 h-2.5 rounded-full"
                               style={{ width: `${Math.min(stat.percentage, 100)}%` }}
                             />
                           </div>
@@ -536,13 +535,12 @@ export default function TpoDashboard() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
               {batches.map(batch => (
-                <div 
-                  key={batch.id} 
-                  className={`p-5 rounded-2xl border transition-all flex flex-col justify-between ${
-                    batch.is_active 
-                      ? 'bg-purple-50/40 border-purple-200 shadow-xs' 
+                <div
+                  key={batch.id}
+                  className={`p-5 rounded-2xl border transition-all flex flex-col justify-between ${batch.is_active
+                      ? 'bg-purple-50/40 border-purple-200 shadow-xs'
                       : 'bg-gray-50 border-gray-200 opacity-80'
-                  }`}
+                    }`}
                 >
                   <div>
                     {/* Header: Year & Status */}
@@ -551,9 +549,8 @@ export default function TpoDashboard() {
                         <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block">Graduation Batch</span>
                         <h4 className="text-2xl font-black text-gray-950">{batch.graduation_year}</h4>
                       </div>
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${
-                        batch.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-700'
-                      }`}>
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${batch.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-700'
+                        }`}>
                         {batch.is_active ? <UserCheck className="w-3.5 h-3.5 text-emerald-600" /> : <UserX className="w-3.5 h-3.5" />}
                         {batch.is_active ? 'Active' : 'Locked'}
                       </span>
@@ -582,7 +579,7 @@ export default function TpoDashboard() {
                     {/* Granular Drive Controls (Spec §4 & §5.B.1) */}
                     <div className="space-y-2.5 p-3 bg-white rounded-xl border border-gray-200/80 mb-4">
                       <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Allowed Drive Types</span>
-                      
+
                       {/* Full-Time Toggle */}
                       <label className="flex items-center justify-between cursor-pointer text-xs">
                         <span className="text-gray-700 font-semibold">Full-Time Drives</span>
@@ -612,11 +609,10 @@ export default function TpoDashboard() {
                   {/* Master Login Button */}
                   <button
                     onClick={() => handleToggleBatch(batch)}
-                    className={`w-full py-2.5 text-xs font-bold rounded-xl border transition shadow-2xs ${
-                      batch.is_active
+                    className={`w-full py-2.5 text-xs font-bold rounded-xl border transition shadow-2xs ${batch.is_active
                         ? 'border-red-200 text-red-600 bg-white hover:bg-red-50'
                         : 'border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
-                    }`}
+                      }`}
                   >
                     {batch.is_active ? 'Restrict Batch Login' : 'Authorize Batch Login'}
                   </button>
@@ -833,7 +829,7 @@ export default function TpoDashboard() {
             <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs h-fit">
               <h3 className="text-lg font-bold text-gray-900 mb-1">Invite Corporate Recruiter</h3>
               <p className="text-xs text-gray-500 mb-4">
-                Anti-abuse enforced: Free public domains (@gmail, @yahoo, etc.) are strictly rejected.
+                Enter the corporate HR or hiring manager's email address (any email address allowed).
               </p>
               <form onSubmit={handleInviteRecruiter} className="space-y-4">
                 <div>
@@ -871,8 +867,8 @@ export default function TpoDashboard() {
                 <div className="mt-4 p-3.5 bg-purple-50 border border-purple-200 rounded-xl space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-purple-900">🔗 Activation Link Ready</span>
-                    <button 
-                      onClick={() => setNewInviteLink(null)} 
+                    <button
+                      onClick={() => setNewInviteLink(null)}
                       className="text-xs text-purple-400 hover:text-purple-600"
                     >
                       Dismiss

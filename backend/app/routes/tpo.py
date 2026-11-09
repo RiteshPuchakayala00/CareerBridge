@@ -308,14 +308,7 @@ def invite_recruiter(
     db: Session = Depends(get_db),
     current_user: User = Depends(tpo_required)
 ):
-    """Invite a corporate HR via email. Rejects free email domains."""
-    domain = data.email.split("@")[1].lower()
-    if domain in BLOCKED_DOMAINS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Free public email domains ({domain}) are not allowed. Use a corporate email address."
-        )
-    
+    """Invite a corporate HR via email. Any email address is permitted."""
     # Check if already invited and not used
     existing = db.query(RecruiterInvitation).filter(
         RecruiterInvitation.email == data.email,
