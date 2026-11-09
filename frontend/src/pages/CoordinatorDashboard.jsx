@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import api, { getAssetUrl } from '../api';
+import { formatTimeString } from '../utils/date';
 import { 
   Award, Users, Radar, Briefcase, Mail, CheckCircle2, AlertCircle, 
   Search, Filter, ExternalLink, RefreshCw, Send, FileText, CheckCheck,
@@ -215,17 +216,17 @@ export default function CoordinatorDashboard() {
 
   const handleCreateLane2Thread = async (e) => {
     e.preventDefault();
-    if (!logisticsForm.job_id || !logisticsForm.subject || !logisticsForm.message) {
-      showNotification("Please fill all required fields", true);
+    if (!logisticsForm.subject?.trim() || !logisticsForm.message?.trim()) {
+      showNotification("Please enter a subject and message", true);
       return;
     }
     setLoading(true);
     try {
       const res = await api.post('/messages/threads', {
-        job_id: parseInt(logisticsForm.job_id),
+        job_id: logisticsForm.job_id ? parseInt(logisticsForm.job_id) : null,
         thread_type: 'COORDINATOR_RECRUITER',
-        subject: logisticsForm.subject,
-        initial_message: logisticsForm.message
+        subject: logisticsForm.subject.trim(),
+        initial_message: logisticsForm.message.trim()
       });
       showNotification("✓ Drive logistics chat initiated with Recruiter!");
       setNewLogisticsModalOpen(false);
@@ -1066,7 +1067,7 @@ export default function CoordinatorDashboard() {
                                 {m.sender_role}
                               </span>
                               <span className="text-[10px] text-gray-400">
-                                {m.created_at ? new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                                {m.created_at ? formatTimeString(m.created_at) : ''}
                               </span>
                             </div>
 
@@ -1209,14 +1210,15 @@ export default function CoordinatorDashboard() {
 
             <form onSubmit={handleCreateLane2Thread} className="space-y-3">
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Select Campus Drive</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Select Campus Drive <span className="text-gray-400 font-normal">(Optional)</span>
+                </label>
                 <select
-                  required
                   value={logisticsForm.job_id}
                   onChange={(e) => setLogisticsForm({ ...logisticsForm, job_id: e.target.value })}
                   className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500"
                 >
-                  <option value="">-- Choose Drive --</option>
+                  <option value="">-- General Inquiry / No Specific Drive --</option>
                   {drives.map(d => (
                     <option key={d.id} value={d.id}>
                       {d.title} ({d.ctc_lpa ? `${d.ctc_lpa} LPA` : 'Drive'})

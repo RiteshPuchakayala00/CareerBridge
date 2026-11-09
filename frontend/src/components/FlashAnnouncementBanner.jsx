@@ -10,7 +10,11 @@ export default function FlashAnnouncementBanner() {
   const fetchActiveBroadcasts = async () => {
     try {
       const res = await api.get('/broadcasts/active');
-      const urgentOnly = (res.data || []).filter(b => b.priority === 'URGENT');
+      const userRaw = localStorage.getItem('user');
+      const currentUser = userRaw ? JSON.parse(userRaw) : null;
+      const urgentOnly = (res.data || []).filter(b => 
+        b.priority === 'URGENT' && (!currentUser || b.sender_id !== currentUser.id)
+      );
       
       // Filter out dismissed announcements
       const dismissedRaw = sessionStorage.getItem('dismissed_urgent_broadcasts');

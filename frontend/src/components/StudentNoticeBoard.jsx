@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
+import { formatDateTime } from '../utils/date';
 import { Megaphone, AlertTriangle, Radio, Award, RefreshCw, Calendar, Briefcase, Filter } from 'lucide-react';
 
 export default function StudentNoticeBoard() {
@@ -112,13 +113,7 @@ export default function StudentNoticeBoard() {
                   <h4 className="font-bold text-gray-900 text-base">{item.title}</h4>
                 </div>
                 <span className="text-xs text-gray-400">
-                  {new Date(item.created_at).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
+                  {formatDateTime(item.created_at)}
                 </span>
               </div>
 

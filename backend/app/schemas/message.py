@@ -2,7 +2,7 @@
 Pydantic Schemas for Messaging, Doubt Desk & Drive FAQs
 Spec Reference: docs/messaging_and_inquiry_system_spec.md §4 & §5
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, field_serializer
 from typing import Optional, List
 from datetime import datetime
 from ..models.message import ThreadType, ThreadStatus
@@ -26,6 +26,14 @@ class ChatMessageResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @field_serializer('created_at', when_used='always')
+    def serialize_created_at(self, dt: Optional[datetime]) -> Optional[str]:
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            return dt.isoformat() + "Z"
+        return dt.isoformat()
 
 
 class ThreadCreateRequest(BaseModel):
@@ -84,6 +92,14 @@ class MessageThreadSummary(BaseModel):
     class Config:
         from_attributes = True
 
+    @field_serializer('last_message_at', 'created_at', 'updated_at', when_used='always')
+    def serialize_summary_datetimes(self, dt: Optional[datetime]) -> Optional[str]:
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            return dt.isoformat() + "Z"
+        return dt.isoformat()
+
 
 class MessageThreadDetail(MessageThreadSummary):
     messages: List[ChatMessageResponse] = []
@@ -99,3 +115,11 @@ class DriveFaqItem(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @field_serializer('created_at', when_used='always')
+    def serialize_faq_created_at(self, dt: Optional[datetime]) -> Optional[str]:
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            return dt.isoformat() + "Z"
+        return dt.isoformat()

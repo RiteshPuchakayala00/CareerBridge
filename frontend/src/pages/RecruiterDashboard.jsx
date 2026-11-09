@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import api, { getAssetUrl } from '../api';
+import { formatTimeString } from '../utils/date';
 import { 
   Briefcase, Building2, Users, CheckCircle2, AlertCircle, FileText, 
   ExternalLink, Sparkles, ChevronRight, RefreshCw, Send, PlusCircle,
@@ -247,17 +248,17 @@ export default function RecruiterDashboard() {
 
   const handleCreateRecruiterChat = async (e) => {
     e.preventDefault();
-    if (!newChatForm.job_id || !newChatForm.subject || !newChatForm.message) {
-      showNotification("Please select a drive and enter a message", true);
+    if (!newChatForm.subject?.trim() || !newChatForm.message?.trim()) {
+      showNotification("Please enter a subject and message", true);
       return;
     }
     setLoading(true);
     try {
       const res = await api.post('/messages/threads', {
-        job_id: parseInt(newChatForm.job_id),
+        job_id: newChatForm.job_id ? parseInt(newChatForm.job_id) : null,
         thread_type: 'COORDINATOR_RECRUITER',
-        subject: newChatForm.subject,
-        initial_message: newChatForm.message
+        subject: newChatForm.subject.trim(),
+        initial_message: newChatForm.message.trim()
       });
       showNotification("Operational message dispatched to College Placement Coordinator!");
       setNewChatModalOpen(false);
@@ -1350,7 +1351,7 @@ export default function RecruiterDashboard() {
                                 {m.sender_role}
                               </span>
                               <span className="text-[10px] text-gray-400">
-                                {m.created_at ? new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                                {m.created_at ? formatTimeString(m.created_at) : ''}
                               </span>
                             </div>
 
@@ -1423,14 +1424,15 @@ export default function RecruiterDashboard() {
 
             <form onSubmit={handleCreateRecruiterChat} className="space-y-3">
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Select Campus Drive</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Select Campus Drive <span className="text-gray-400 font-normal">(Optional)</span>
+                </label>
                 <select
-                  required
                   value={newChatForm.job_id}
                   onChange={(e) => setNewChatForm({ ...newChatForm, job_id: e.target.value })}
                   className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-500"
                 >
-                  <option value="">-- Choose Job Opening --</option>
+                  <option value="">-- General Inquiry / No Specific Drive --</option>
                   {jobs.map(j => (
                     <option key={j.id} value={j.id}>
                       {j.title} ({j.job_type})

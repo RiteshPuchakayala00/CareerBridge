@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
+import { formatTimeAgo } from '../utils/date';
 import {
   Bell, CheckCheck, Briefcase, Award, Calendar, MessageSquare,
   Sparkles, CheckCircle2, Radio, FileText, ChevronRight, X
@@ -98,22 +99,7 @@ export default function NotificationBell() {
   };
 
   const formatTimestamp = (dateStr) => {
-    if (!dateStr) return '';
-    try {
-      const date = new Date(dateStr);
-      const now = new Date();
-      const diffSec = Math.floor((now - date) / 1000);
-      if (diffSec < 60) return 'Just now';
-      const diffMin = Math.floor(diffSec / 60);
-      if (diffMin < 60) return `${diffMin}m ago`;
-      const diffHours = Math.floor(diffMin / 60);
-      if (diffHours < 24) return `${diffHours}h ago`;
-      const diffDays = Math.floor(diffHours / 24);
-      if (diffDays < 7) return `${diffDays}d ago`;
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    } catch {
-      return dateStr;
-    }
+    return formatTimeAgo(dateStr);
   };
 
   const displayedNotifications = filter === 'UNREAD'

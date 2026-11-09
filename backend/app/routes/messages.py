@@ -166,6 +166,10 @@ def create_thread(
                 job = db.query(JobPosting).filter(JobPosting.id == data.job_id).first()
                 if job and job.created_by_id:
                     recruiter_id = job.created_by_id
+            if not recruiter_id:
+                recruiter = db.query(User).filter(User.role == RoleEnum.RECRUITER, User.is_active == True).first()
+                if recruiter:
+                    recruiter_id = recruiter.id
         else:
             student_id = data.student_id  # If coordinator initiates doubt to student
             recruiter_id = None

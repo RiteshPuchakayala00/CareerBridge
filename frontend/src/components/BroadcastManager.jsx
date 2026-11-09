@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
+import { formatDateTime } from '../utils/date';
 import {
   Radio, Megaphone, Send, Shield, Award, Users, AlertTriangle,
   Clock, CheckCircle2, AlertCircle, Filter, Calendar, Briefcase, RefreshCw
@@ -396,12 +397,7 @@ export default function BroadcastManager({ role, boundDepartment }) {
                     </div>
 
                     <span className="text-[11px] text-gray-400 whitespace-nowrap">
-                      {new Date(b.created_at).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
+                      {formatDateTime(b.created_at, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
 

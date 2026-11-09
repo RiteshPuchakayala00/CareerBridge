@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import api from '../api';
+import { formatDateTime } from '../utils/date';
 import {
   Users, Award, Calendar, UploadCloud, Briefcase, Mail, CheckCircle2,
   AlertCircle, ShieldCheck, UserX, UserCheck, TrendingUp, DollarSign,
@@ -933,7 +934,7 @@ export default function TpoDashboard() {
                             )}
                           </td>
                           <td className="px-6 py-4 text-gray-500 text-xs">
-                            {inv.created_at ? new Date(inv.created_at).toLocaleDateString() : 'N/A'}
+                            {inv.created_at ? formatDateTime(inv.created_at, { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
                           </td>
                           <td className="px-6 py-4 text-right">
                             {!inv.is_used && fullLink ? (

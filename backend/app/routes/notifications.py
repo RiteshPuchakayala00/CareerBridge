@@ -206,6 +206,8 @@ def create_broadcast(
 
     prefix = "📢 URGENT: " if data.priority == BroadcastPriority.URGENT else "📢 Notice: "
     for s in targeted_students:
+        if s.id == current_user.id:
+            continue
         create_system_notification(
             db=db,
             user_id=s.id,
@@ -289,6 +291,7 @@ def get_active_broadcasts(
     now = datetime.utcnow()
     query = db.query(BroadcastAnnouncement).filter(
         BroadcastAnnouncement.is_active == True,
+        BroadcastAnnouncement.sender_id != current_user.id,
         or_(
             BroadcastAnnouncement.expires_at == None,
             BroadcastAnnouncement.expires_at > now

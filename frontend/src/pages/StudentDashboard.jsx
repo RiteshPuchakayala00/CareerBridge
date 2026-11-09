@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import api, { getAssetUrl } from '../api';
+import { formatTimeString } from '../utils/date';
 import { 
   GraduationCap, Lock, CheckCircle2, AlertCircle, FileText, UploadCloud, 
   Briefcase, Sparkles, ExternalLink, RefreshCw, Send, CheckCircle, Clock, 
@@ -1714,7 +1715,7 @@ export default function StudentDashboard() {
                                 {m.sender_role}
                               </span>
                               <span className="text-[10px] text-gray-400">
-                                {m.created_at ? new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                                {m.created_at ? formatTimeString(m.created_at) : ''}
                               </span>
                             </div>
 

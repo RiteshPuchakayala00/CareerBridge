@@ -2,7 +2,7 @@
 Pydantic Schemas for Notifications & Targeted Broadcasts
 Spec Reference: docs/notification_and_broadcast_spec.md §5 & §6
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, field_serializer
 from typing import Optional, List
 from datetime import datetime
 from ..models.notification import NotificationCategory, BroadcastPriority
@@ -20,6 +20,14 @@ class NotificationResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @field_serializer('created_at', when_used='always')
+    def serialize_created_at(self, dt: Optional[datetime]) -> Optional[str]:
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            return dt.isoformat() + "Z"
+        return dt.isoformat()
 
 
 class NotificationListResponse(BaseModel):
@@ -57,3 +65,11 @@ class BroadcastResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @field_serializer('created_at', 'expires_at', when_used='always')
+    def serialize_datetimes(self, dt: Optional[datetime]) -> Optional[str]:
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            return dt.isoformat() + "Z"
+        return dt.isoformat()
