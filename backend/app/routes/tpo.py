@@ -19,6 +19,8 @@ from ..models.recruiter_invitation import RecruiterInvitation
 from ..models.job import JobPosting, JobStatus
 from ..models.application import Application, AppStatus
 from ..models.company import Company
+from ..models.notification import NotificationCategory
+from ..routes.notifications import create_system_notification
 from ..schemas.rbac import (
     CoordinatorCreate, CoordinatorResponse,
     BatchEligibilityToggle, BatchEligibilityResponse,
@@ -409,7 +411,7 @@ def list_all_jobs(
     current_user: User = Depends(tpo_required)
 ):
     """List all jobs (pending approval + approved) with company info and lifecycle status."""
-    jobs = db.query(JobPosting, Company).outerjoin(Company, JobPosting.company_id == Company.id).all()
+    jobs = db.query(JobPosting, Company).outerjoin(Company, JobPosting.company_id == Company.id).order_by(JobPosting.created_at.desc()).all()
     return [
         {
             "id": j.id,
@@ -426,10 +428,10 @@ def list_all_jobs(
             "is_active": j.is_active,
             "status": j.status.value if j.status else "PENDING_APPROVAL",
             "rejection_reason": j.rejection_reason,
-            "deadline": j.deadline.isoformat() if j.deadline else None,
-            "drive_date": j.drive_date.isoformat() if j.drive_date else None,
+            "deadline": (j.deadline.isoformat() + "Z") if j.deadline else None,
+            "drive_date": (j.drive_date.isoformat() + "Z") if j.drive_date else None,
             "company_name": c.company_name if c else None,
-            "created_at": j.created_at.isoformat() if j.created_at else None,
+            "created_at": (j.created_at.isoformat() + "Z") if j.created_at else None,
             "applicant_count": db.query(Application).filter(Application.job_id == j.id).count()
         }
         for j, c in jobs
@@ -451,6 +453,18 @@ def approve_job(
     job.is_approved = True
     job.approved_by_id = current_user.id
     job.rejection_reason = None
+
+    # Notify drive creator (recruiter or coordinator)
+    if job.created_by_id and job.created_by_id != current_user.id:
+        create_system_notification(
+            db=db,
+            user_id=job.created_by_id,
+            title=f"🎉 Drive Approved: {job.title}",
+            message=f"Your campus recruitment drive '{job.title}' has been reviewed & approved by TPO. It is now published live for eligible students!",
+            category=NotificationCategory.JOB_ALERT,
+            action_url="/recruiter" if job.company_id else "/coordinator"
+        )
+
     db.commit()
     return {"message": f"Job '{job.title}' has been approved and published", "status": "PUBLISHED"}
 
@@ -471,6 +485,18 @@ def reject_job(
     job.is_approved = False
     job.is_active = False
     job.rejection_reason = reason
+
+    # Notify drive creator
+    if job.created_by_id and job.created_by_id != current_user.id:
+        create_system_notification(
+            db=db,
+            user_id=job.created_by_id,
+            title=f"❌ Drive Review Update: {job.title}",
+            message=f"Your recruitment drive '{job.title}' was reviewed and not approved. Reason: {reason}",
+            category=NotificationCategory.JOB_ALERT,
+            action_url="/recruiter" if job.company_id else "/coordinator"
+        )
+
     db.commit()
     return {"message": f"Job '{job.title}' has been rejected", "status": "REJECTED"}
 

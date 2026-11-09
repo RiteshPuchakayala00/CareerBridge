@@ -15,6 +15,8 @@ from ..models.recruiter_invitation import RecruiterInvitation
 from ..models.job import JobPosting, JobStatus
 from ..models.company import Company
 from ..models.application import Application, AppStatus
+from ..models.notification import NotificationCategory
+from ..routes.notifications import create_system_notification
 from ..schemas.rbac import (
     InviteRecruiterRequest, InviteRecruiterResponse,
     StudentListResponse, JobPostingCreate, JobPostingResponse,
@@ -123,6 +125,20 @@ def propose_drive(
     db.add(job)
     db.commit()
     db.refresh(job)
+
+    # Flash alert to TPO admins for proposed drive approval
+    tpo_admins = db.query(User).filter(User.role == RoleEnum.TPO_ADMIN, User.is_active == True).all()
+    for admin in tpo_admins:
+        create_system_notification(
+            db=db,
+            user_id=admin.id,
+            title=f"⚠️ Coordinator Proposed Drive: {job.title}",
+            message=f"Faculty Coordinator {current_user.full_name} ({current_user.department}) proposed a new drive for '{job.title}'. TPO review & approval required.",
+            category=NotificationCategory.JOB_ALERT,
+            action_url="/tpo"
+        )
+    db.commit()
+
     return {"message": f"Drive '{data.title}' proposed for TPO approval", "job_id": job.id, "status": "PENDING_APPROVAL"}
 
 

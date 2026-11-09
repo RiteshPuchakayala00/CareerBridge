@@ -44,3 +44,4 @@ export function formatTimeString(dateStr) {
   if (!date) return '';
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
+

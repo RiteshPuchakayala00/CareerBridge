@@ -258,6 +258,20 @@ def create_job(
     db.add(job)
     db.commit()
     db.refresh(job)
+
+    # Flash alert to TPO admins for drive approval
+    tpo_admins = db.query(User).filter(User.role == RoleEnum.TPO_ADMIN, User.is_active == True).all()
+    for admin in tpo_admins:
+        if admin.id != current_user.id:
+            create_system_notification(
+                db=db,
+                user_id=admin.id,
+                title=f"⚠️ Drive Approval Required: {job.title}",
+                message=f"A new recruitment drive for '{job.title}' ({job.job_type}) has been submitted and is awaiting TPO approval.",
+                category=NotificationCategory.JOB_ALERT,
+                action_url="/tpo"
+            )
+    db.commit()
     
     return {
         "message": f"Job '{data.title}' submitted for approval",
@@ -335,6 +349,17 @@ def approve_job(
     job.is_approved = True
     job.approved_by_id = current_user.id
     job.rejection_reason = None
+
+    if job.created_by_id and job.created_by_id != current_user.id:
+        create_system_notification(
+            db=db,
+            user_id=job.created_by_id,
+            title=f"🎉 Drive Approved: {job.title}",
+            message=f"Your campus drive '{job.title}' has been approved and is now live for eligible students!",
+            category=NotificationCategory.JOB_ALERT,
+            action_url="/recruiter" if job.company_id else "/coordinator"
+        )
+
     db.commit()
     
     return {
@@ -369,6 +394,17 @@ def reject_job(
     job.is_approved = False
     job.is_active = False
     job.rejection_reason = data.reason
+
+    if job.created_by_id and job.created_by_id != current_user.id:
+        create_system_notification(
+            db=db,
+            user_id=job.created_by_id,
+            title=f"❌ Drive Review Update: {job.title}",
+            message=f"Your drive '{job.title}' was reviewed and not approved: {data.reason}",
+            category=NotificationCategory.JOB_ALERT,
+            action_url="/recruiter" if job.company_id else "/coordinator"
+        )
+
     db.commit()
     
     return {

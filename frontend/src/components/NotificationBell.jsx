@@ -155,21 +155,19 @@ export default function NotificationBell() {
           <div className="flex border-b border-gray-100 px-4 py-2 bg-white gap-2">
             <button
               onClick={() => setFilter('ALL')}
-              className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
-                filter === 'ALL'
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${filter === 'ALL'
                   ? 'bg-blue-50 text-blue-700'
                   : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-              }`}
+                }`}
             >
               All ({notifications.length})
             </button>
             <button
               onClick={() => setFilter('UNREAD')}
-              className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
-                filter === 'UNREAD'
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${filter === 'UNREAD'
                   ? 'bg-rose-50 text-rose-700'
                   : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-              }`}
+                }`}
             >
               Unread ({unreadCount})
             </button>
@@ -190,14 +188,12 @@ export default function NotificationBell() {
                 <div
                   key={notif.id}
                   onClick={(e) => handleMarkAsRead(notif, e)}
-                  className={`p-3.5 hover:bg-slate-50 transition cursor-pointer flex gap-3 items-start relative ${
-                    !notif.is_read ? 'bg-blue-50/40' : 'bg-white'
-                  }`}
+                  className={`p-3.5 hover:bg-slate-50 transition cursor-pointer flex gap-3 items-start relative ${!notif.is_read ? 'bg-blue-50/40' : 'bg-white'
+                    }`}
                 >
                   {/* Category Icon Badge */}
-                  <div className={`p-2 rounded-xl flex-shrink-0 ${
-                    !notif.is_read ? 'bg-white shadow-xs border border-blue-100' : 'bg-gray-100'
-                  }`}>
+                  <div className={`p-2 rounded-xl flex-shrink-0 ${!notif.is_read ? 'bg-white shadow-xs border border-blue-100' : 'bg-gray-100'
+                    }`}>
                     {getCategoryIcon(notif.category)}
                   </div>
 

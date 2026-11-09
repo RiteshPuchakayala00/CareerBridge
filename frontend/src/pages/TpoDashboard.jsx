@@ -6,7 +6,8 @@ import {
   Users, Award, Calendar, UploadCloud, Briefcase, Mail, CheckCircle2,
   AlertCircle, ShieldCheck, UserX, UserCheck, TrendingUp, DollarSign,
   Search, Filter, ExternalLink, RefreshCw, FileText, Edit2, Check, X,
-  ToggleLeft, ToggleRight, Megaphone, Copy, Link2
+  ToggleLeft, ToggleRight, Megaphone, Copy, Link2, AlertTriangle,
+  ArrowRight, Clock, Building2, XCircle
 } from 'lucide-react';
 import BroadcastManager from '../components/BroadcastManager';
 
@@ -37,6 +38,14 @@ export default function TpoDashboard() {
   // Student Filters
   const [studentSearch, setStudentSearch] = useState('');
   const [selectedDept, setSelectedDept] = useState('');
+
+  // Job Governance & Date Filter States
+  const [jobStatusFilter, setJobStatusFilter] = useState('ALL'); // 'ALL', 'PENDING', 'APPROVED', 'REJECTED'
+  const [jobSearch, setJobSearch] = useState('');
+  const [jobDateFilter, setJobDateFilter] = useState('ALL'); // 'ALL', 'TODAY', 'WEEK', 'MONTH', 'CUSTOM'
+  const [jobStartDate, setJobStartDate] = useState('');
+  const [jobEndDate, setJobEndDate] = useState('');
+  const [jobSortOrder, setJobSortOrder] = useState('NEWEST'); // 'NEWEST', 'OLDEST'
 
   const fetchAnalytics = async () => {
     try {
@@ -235,13 +244,76 @@ export default function TpoDashboard() {
   // Job Governance
   const handleJobAction = async (jobId, action) => {
     try {
-      await api.put(`/tpo/jobs/${jobId}/${action}`);
-      showNotification(`Job successfully ${action}d.`);
+      if (action === 'reject') {
+        const reason = window.prompt("Reason for rejecting/unpublishing this campus recruitment drive:", "Does not meet university requirements");
+        if (reason === null) return;
+        await api.put(`/tpo/jobs/${jobId}/reject?reason=${encodeURIComponent(reason)}`);
+        showNotification("Drive rejected and feedback delivered to recruiter.");
+      } else {
+        await api.put(`/tpo/jobs/${jobId}/approve`);
+        showNotification("✓ Drive approved and published live for eligible students!");
+      }
       fetchJobs();
     } catch (err) {
       showNotification(err.response?.data?.detail || "Action failed", true);
     }
   };
+
+  const pendingJobsCount = jobs.filter(j => !j.is_approved && j.status !== 'REJECTED').length;
+  const approvedJobsCount = jobs.filter(j => j.is_approved).length;
+  const rejectedJobsCount = jobs.filter(j => j.status === 'REJECTED').length;
+
+  const filteredJobs = jobs.filter(j => {
+    // Status filter
+    if (jobStatusFilter === 'PENDING') {
+      if (j.is_approved || j.status === 'REJECTED') return false;
+    } else if (jobStatusFilter === 'APPROVED') {
+      if (!j.is_approved) return false;
+    } else if (jobStatusFilter === 'REJECTED') {
+      if (j.status !== 'REJECTED') return false;
+    }
+
+    // Search query
+    if (jobSearch.trim()) {
+      const q = jobSearch.toLowerCase();
+      const matchTitle = j.title?.toLowerCase().includes(q);
+      const matchCompany = j.company_name?.toLowerCase().includes(q);
+      const matchLoc = j.location?.toLowerCase().includes(q);
+      const matchBatch = j.target_batch_year ? String(j.target_batch_year).includes(q) : false;
+      const matchDept = j.eligible_departments?.some(d => d.toLowerCase().includes(q));
+      if (!matchTitle && !matchCompany && !matchLoc && !matchBatch && !matchDept) return false;
+    }
+
+    // Date filter
+    const dateToCheck = j.created_at || j.drive_date;
+    if (jobDateFilter !== 'ALL' && dateToCheck) {
+      const d = new Date(dateToCheck);
+      const now = new Date();
+      if (jobDateFilter === 'TODAY') {
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        if (d < startOfToday) return false;
+      } else if (jobDateFilter === 'WEEK') {
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        if (d < weekAgo) return false;
+      } else if (jobDateFilter === 'MONTH') {
+        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        if (d < monthAgo) return false;
+      } else if (jobDateFilter === 'CUSTOM') {
+        if (jobStartDate && d < new Date(jobStartDate)) return false;
+        if (jobEndDate) {
+          const end = new Date(jobEndDate);
+          end.setHours(23, 59, 59, 999);
+          if (d > end) return false;
+        }
+      }
+    }
+
+    return true;
+  }).sort((a, b) => {
+    const da = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const db = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return jobSortOrder === 'OLDEST' ? da - db : db - da;
+  });
 
   const filteredStudents = students.filter(s =>
     s.full_name?.toLowerCase().includes(studentSearch.toLowerCase()) ||
@@ -296,6 +368,39 @@ export default function TpoDashboard() {
           </div>
         )}
 
+        {/* Flash Notification: Pending Campus Drive Approvals */}
+        {pendingJobsCount > 0 && (
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-white/20 rounded-xl backdrop-blur-xs flex-shrink-0 animate-pulse">
+                <AlertTriangle className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/25">
+                    Action Required
+                  </span>
+                  <h4 className="font-bold text-sm sm:text-base">
+                    {pendingJobsCount} Campus Drive {pendingJobsCount === 1 ? 'Approval' : 'Approvals'} Pending Review
+                  </h4>
+                </div>
+                <p className="text-xs text-white/90 mt-0.5">
+                  Recruiters/coordinators have submitted new placement drives awaiting your TPO review & publication.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setActiveTab('jobs');
+                setJobStatusFilter('PENDING');
+              }}
+              className="px-4 py-2 bg-white text-orange-700 hover:bg-orange-50 font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer flex-shrink-0"
+            >
+              Review & Approve Now <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* Navigation Tabs */}
         <div className="flex border-b border-gray-200 overflow-x-auto space-x-1 sm:space-x-4 bg-white px-4 py-2 rounded-xl shadow-xs">
           {[
@@ -303,7 +408,7 @@ export default function TpoDashboard() {
             { id: 'coordinators', label: 'Faculty Coordinators', icon: Users },
             { id: 'batches', label: 'Batch Eligibility', icon: Calendar },
             { id: 'roster', label: 'Master Student Roster', icon: UploadCloud },
-            { id: 'jobs', label: 'Drives & Governance', icon: Briefcase },
+            { id: 'jobs', label: 'Drives & Approvals', icon: Briefcase, badge: pendingJobsCount },
             { id: 'recruiters', label: 'Recruiter Onboarding', icon: Mail },
             { id: 'broadcasts', label: 'Broadcasts & Circulars', icon: Megaphone }
           ].map(tab => {
@@ -319,7 +424,14 @@ export default function TpoDashboard() {
                   }`}
               >
                 <Icon className="w-4 h-4" />
-                {tab.label}
+                <span>{tab.label}</span>
+                {tab.badge ? (
+                  <span className={`px-1.5 py-0.2 text-[10px] font-black rounded-full ${
+                    isActive ? 'bg-white text-purple-700' : 'bg-rose-600 text-white animate-pulse'
+                  }`}>
+                    {tab.badge}
+                  </span>
+                ) : null}
               </button>
             );
           })}
@@ -743,85 +855,285 @@ export default function TpoDashboard() {
           </div>
         )}
 
-        {/* TAB 5: DRIVES & GOVERNANCE */}
+        {/* TAB 5: DRIVES & APPROVALS GOVERNANCE */}
         {activeTab === 'jobs' && (
-          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-xs">
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50/50 flex justify-between items-center">
-              <div>
-                <h3 className="font-bold text-gray-900 text-base">Campus Recruitment Drives</h3>
-                <p className="text-xs text-gray-500">Approve or reject drives proposed by coordinators and recruiters</p>
+          <div className="space-y-4">
+            {/* Status Tabs and Metrics Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-gray-200 shadow-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                {[
+                  { id: 'ALL', label: 'All Drives', count: jobs.length, color: 'text-gray-700 bg-gray-100' },
+                  { id: 'PENDING', label: 'Pending Review', count: pendingJobsCount, color: 'text-amber-800 bg-amber-100 ring-1 ring-amber-300' },
+                  { id: 'APPROVED', label: 'Approved & Live', count: approvedJobsCount, color: 'text-emerald-800 bg-emerald-100' },
+                  { id: 'REJECTED', label: 'Rejected', count: rejectedJobsCount, color: 'text-rose-800 bg-rose-100' }
+                ].map(st => (
+                  <button
+                    key={st.id}
+                    onClick={() => setJobStatusFilter(st.id)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                      jobStatusFilter === st.id
+                        ? 'bg-purple-600 text-white shadow-xs'
+                        : `${st.color} hover:opacity-90`
+                    }`}
+                  >
+                    <span>{st.label}</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                      jobStatusFilter === st.id ? 'bg-white/30 text-white' : 'bg-black/10 text-gray-800'
+                    }`}>
+                      {st.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
+                <span>Showing <strong className="text-gray-800">{filteredJobs.length}</strong> of {jobs.length} drives</span>
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 text-sm">
-                <thead className="bg-gray-50 text-gray-600">
-                  <tr>
-                    <th className="px-6 py-3 text-left font-semibold">Job Title & Company</th>
-                    <th className="px-6 py-3 text-left font-semibold">Package / CTC</th>
-                    <th className="px-6 py-3 text-left font-semibold">Min CGPA</th>
-                    <th className="px-6 py-3 text-left font-semibold">Target Branches</th>
-                    <th className="px-6 py-3 text-left font-semibold">Drive Date</th>
-                    <th className="px-6 py-3 text-left font-semibold">Status</th>
-                    <th className="px-6 py-3 text-right font-semibold">Governance Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 bg-white">
-                  {jobs.map(job => (
-                    <tr key={job.id} className="hover:bg-gray-50 transition">
-                      <td className="px-6 py-4">
-                        <p className="font-bold text-gray-900">{job.title}</p>
-                        <p className="text-xs text-gray-500">{job.company_name || 'Coordinator Proposal'}</p>
-                        <span className="inline-block mt-1 text-[10px] font-semibold bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200">
-                          🎓 {job.target_batch_year ? `Batch ${job.target_batch_year}` : 'All Batches'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 font-semibold text-blue-600">{job.ctc_lpa ? `${job.ctc_lpa} LPA` : 'Stipend'}</td>
-                      <td className="px-6 py-4">{job.eligibility_cgpa ?? 'Any'}</td>
-                      <td className="px-6 py-4">
-                        <span className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded">
-                          {job.eligible_departments?.join(', ') || 'All Branches'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-gray-600 text-xs">
-                        {job.drive_date ? new Date(job.drive_date).toLocaleDateString() : 'TBD'}
-                      </td>
-                      <td className="px-6 py-4">
-                        {job.is_approved ? (
-                          <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
-                            Approved & Live
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
-                            Pending Review
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-right space-x-2">
-                        {!job.is_approved ? (
-                          <button
-                            onClick={() => handleJobAction(job.id, 'approve')}
-                            className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-medium transition"
-                          >
-                            Approve
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleJobAction(job.id, 'reject')}
-                            className="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded text-xs font-medium transition"
-                          >
-                            Unpublish
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {jobs.length === 0 && (
-                    <tr>
-                      <td colSpan="7" className="text-center py-8 text-gray-500">No recruitment drives posted yet.</td>
-                    </tr>
+
+            {/* Filter and Date Search Controls Bar */}
+            <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-xs space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+                {/* Search Input */}
+                <div className="md:col-span-5 relative">
+                  <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    placeholder="Search drive title, company, location, batch year..."
+                    value={jobSearch}
+                    onChange={(e) => setJobSearch(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none"
+                  />
+                  {jobSearch && (
+                    <button 
+                      onClick={() => setJobSearch('')} 
+                      className="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
                   )}
-                </tbody>
-              </table>
+                </div>
+
+                {/* Date Filter Dropdown */}
+                <div className="md:col-span-4 flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  <select
+                    value={jobDateFilter}
+                    onChange={(e) => setJobDateFilter(e.target.value)}
+                    className="w-full py-2 px-3 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none bg-white font-medium"
+                  >
+                    <option value="ALL">All Submission Dates</option>
+                    <option value="TODAY">Submitted Today</option>
+                    <option value="WEEK">Past 7 Days</option>
+                    <option value="MONTH">Past 30 Days</option>
+                    <option value="CUSTOM">Custom Date Range...</option>
+                  </select>
+                </div>
+
+                {/* Sort Order Dropdown */}
+                <div className="md:col-span-3 flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  <select
+                    value={jobSortOrder}
+                    onChange={(e) => setJobSortOrder(e.target.value)}
+                    className="w-full py-2 px-3 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none bg-white font-medium"
+                  >
+                    <option value="NEWEST">Newest Submitted First</option>
+                    <option value="OLDEST">Oldest Submitted First</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Custom Date Range Picker when selected */}
+              {jobDateFilter === 'CUSTOM' && (
+                <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-100 text-xs">
+                  <span className="font-semibold text-gray-600">From:</span>
+                  <input
+                    type="date"
+                    value={jobStartDate}
+                    onChange={(e) => setJobStartDate(e.target.value)}
+                    className="px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                  <span className="font-semibold text-gray-600">To:</span>
+                  <input
+                    type="date"
+                    value={jobEndDate}
+                    onChange={(e) => setJobEndDate(e.target.value)}
+                    className="px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                  {(jobStartDate || jobEndDate) && (
+                    <button
+                      onClick={() => { setJobStartDate(''); setJobEndDate(''); }}
+                      className="text-xs text-purple-600 hover:text-purple-800 font-semibold cursor-pointer"
+                    >
+                      Reset Range
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Drives Table */}
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 text-sm">
+                  <thead className="bg-gray-50 text-gray-600">
+                    <tr>
+                      <th className="px-5 py-3 text-left font-bold text-xs uppercase tracking-wider">Job Title & Company</th>
+                      <th className="px-5 py-3 text-left font-bold text-xs uppercase tracking-wider">Package / CTC</th>
+                      <th className="px-5 py-3 text-left font-bold text-xs uppercase tracking-wider">Eligibility</th>
+                      <th className="px-5 py-3 text-left font-bold text-xs uppercase tracking-wider">Submitted & Drive Date</th>
+                      <th className="px-5 py-3 text-left font-bold text-xs uppercase tracking-wider">Status</th>
+                      <th className="px-5 py-3 text-right font-bold text-xs uppercase tracking-wider">Governance Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 bg-white">
+                    {filteredJobs.map(job => {
+                      const isPending = !job.is_approved && job.status !== 'REJECTED';
+                      const isApproved = job.is_approved;
+                      const isRejected = job.status === 'REJECTED';
+
+                      return (
+                        <tr key={job.id} className={`transition ${isPending ? 'bg-amber-50/30 hover:bg-amber-50/60' : 'hover:bg-gray-50/70'}`}>
+                          <td className="px-5 py-4">
+                            <div className="flex items-start gap-2.5">
+                              <div className="p-2 bg-purple-50 text-purple-700 rounded-xl mt-0.5">
+                                <Briefcase className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <p className="font-bold text-gray-900 leading-snug">{job.title}</p>
+                                <p className="text-xs font-semibold text-gray-600 flex items-center gap-1.5 mt-0.5">
+                                  <Building2 className="w-3.5 h-3.5 text-gray-400" />
+                                  {job.company_name || 'Internal Campus Proposal'}
+                                </p>
+                                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                                  <span className="inline-block text-[10px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200">
+                                    🎓 {job.target_batch_year ? `Class of ${job.target_batch_year}` : 'All Batches'}
+                                  </span>
+                                  <span className="inline-block text-[10px] font-semibold bg-gray-100 text-gray-700 px-2 py-0.5 rounded">
+                                    {job.job_type}
+                                  </span>
+                                  {job.location && (
+                                    <span className="text-[10px] text-gray-500">
+                                      📍 {job.location}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="px-5 py-4">
+                            <span className="font-extrabold text-sm text-blue-600 block">
+                              {job.ctc_lpa ? `${job.ctc_lpa} LPA` : (job.stipend_monthly ? `₹${job.stipend_monthly}/mo` : 'Unspecified')}
+                            </span>
+                            <span className="text-[11px] text-gray-500 font-medium">
+                              {job.applicant_count || 0} applicant(s)
+                            </span>
+                          </td>
+
+                          <td className="px-5 py-4">
+                            <p className="text-xs font-semibold text-gray-800">
+                              Min CGPA: <span className="font-bold">{job.eligibility_cgpa ?? 'None'}</span>
+                            </p>
+                            <p className="text-[11px] text-gray-500 mt-0.5 truncate max-w-xs" title={job.eligible_departments?.join(', ') || 'All Branches'}>
+                              Branches: {job.eligible_departments?.join(', ') || 'All Branches'}
+                            </p>
+                          </td>
+
+                          <td className="px-5 py-4 text-xs">
+                            <div className="space-y-1">
+                              <p className="text-gray-700 font-medium flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-gray-400" />
+                                <span>Submitted: {job.created_at ? formatDateTime(job.created_at, { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}</span>
+                              </p>
+                              <p className="text-gray-500 flex items-center gap-1">
+                                <Calendar className="w-3 h-3 text-gray-400" />
+                                <span>Drive: {job.drive_date ? formatDateTime(job.drive_date, { month: 'short', day: 'numeric', year: 'numeric' }) : 'TBD'}</span>
+                              </p>
+                            </div>
+                          </td>
+
+                          <td className="px-5 py-4">
+                            {isPending && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-200 animate-pulse">
+                                <AlertTriangle className="w-3 h-3 text-amber-700" /> Pending Review
+                              </span>
+                            )}
+                            {isApproved && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Approved & Live
+                              </span>
+                            )}
+                            {isRejected && (
+                              <div>
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                                  <XCircle className="w-3 h-3 text-rose-600" /> Rejected
+                                </span>
+                                {job.rejection_reason && (
+                                  <p className="text-[10px] text-rose-700 mt-1 max-w-[160px] truncate" title={job.rejection_reason}>
+                                    {job.rejection_reason}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </td>
+
+                          <td className="px-5 py-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {isPending && (
+                                <>
+                                  <button
+                                    onClick={() => handleJobAction(job.id, 'approve')}
+                                    className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <Check className="w-3.5 h-3.5" /> Approve & Publish
+                                  </button>
+                                  <button
+                                    onClick={() => handleJobAction(job.id, 'reject')}
+                                    className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <X className="w-3.5 h-3.5" /> Reject
+                                  </button>
+                                </>
+                              )}
+
+                              {isApproved && (
+                                <button
+                                  onClick={() => handleJobAction(job.id, 'reject')}
+                                  className="px-3 py-1.5 bg-gray-100 hover:bg-rose-50 text-gray-700 hover:text-rose-700 border border-gray-200 rounded-xl text-xs font-semibold transition cursor-pointer"
+                                  title="Unpublish this drive from student portal"
+                                >
+                                  Unpublish Drive
+                                </button>
+                              )}
+
+                              {isRejected && (
+                                <button
+                                  onClick={() => handleJobAction(job.id, 'approve')}
+                                  className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl text-xs font-bold transition cursor-pointer"
+                                >
+                                  Re-Approve Drive
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+
+                    {filteredJobs.length === 0 && (
+                      <tr>
+                        <td colSpan="6" className="text-center py-12 text-gray-500">
+                          <Briefcase className="w-10 h-10 mx-auto text-gray-300 mb-2" />
+                          <p className="font-semibold text-gray-700">No recruitment drives matching filter criteria.</p>
+                          <p className="text-xs text-gray-400 mt-1">Try resetting the status or date range filter.</p>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}

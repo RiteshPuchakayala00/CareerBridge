@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import api, { getAssetUrl } from '../api';
-import { formatTimeString } from '../utils/date';
+import { formatTimeString, formatDateTime, formatTimeAgo } from '../utils/date';
 import { 
   Briefcase, Building2, Users, CheckCircle2, AlertCircle, FileText, 
   ExternalLink, Sparkles, ChevronRight, RefreshCw, Send, PlusCircle,
@@ -26,7 +26,10 @@ export default function RecruiterDashboard() {
   const [selectedAppIds, setSelectedAppIds] = useState([]);
   const [roundFilter, setRoundFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  const [minScoreFilter, setMinScoreFilter] = useState('ALL');
+  const [applicantDateFilter, setApplicantDateFilter] = useState('ALL'); // 'ALL', 'TODAY', 'WEEK', 'MONTH', 'CUSTOM'
+  const [applicantStartDate, setApplicantStartDate] = useState('');
+  const [applicantEndDate, setApplicantEndDate] = useState('');
+  const [applicantSortOrder, setApplicantSortOrder] = useState('NEWEST'); // 'NEWEST', 'OLDEST'
 
   // Modals state
   const [showShortlistModal, setShowShortlistModal] = useState(false);
@@ -498,11 +501,6 @@ export default function RecruiterDashboard() {
       const targetRNum = parseInt(roundFilter);
       if (app.current_round_number !== targetRNum) return false;
     }
-    // Score filter
-    if (minScoreFilter !== 'ALL') {
-      const minVal = parseFloat(minScoreFilter);
-      if ((app.ai_match_score || 0) < minVal) return false;
-    }
     // Search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -512,7 +510,33 @@ export default function RecruiterDashboard() {
       const matchDept = app.department?.toLowerCase().includes(q);
       if (!matchName && !matchEmail && !matchRoll && !matchDept) return false;
     }
+    // Date filter
+    if (applicantDateFilter !== 'ALL' && app.applied_at) {
+      const appDate = new Date(app.applied_at);
+      const now = new Date();
+      if (applicantDateFilter === 'TODAY') {
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        if (appDate < startOfToday) return false;
+      } else if (applicantDateFilter === 'WEEK') {
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        if (appDate < weekAgo) return false;
+      } else if (applicantDateFilter === 'MONTH') {
+        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        if (appDate < monthAgo) return false;
+      } else if (applicantDateFilter === 'CUSTOM') {
+        if (applicantStartDate && appDate < new Date(applicantStartDate)) return false;
+        if (applicantEndDate) {
+          const end = new Date(applicantEndDate);
+          end.setHours(23, 59, 59, 999);
+          if (appDate > end) return false;
+        }
+      }
+    }
     return true;
+  }).sort((a, b) => {
+    const da = a.applied_at ? new Date(a.applied_at).getTime() : 0;
+    const db = b.applied_at ? new Date(b.applied_at).getTime() : 0;
+    return applicantSortOrder === 'OLDEST' ? da - db : db - da;
   });
 
   const selectedJob = jobs.find(j => j.id === selectedJobId);
@@ -834,21 +858,63 @@ export default function RecruiterDashboard() {
                         </select>
                       </div>
 
-                      {/* Filter by Match Score */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-gray-500 whitespace-nowrap">AI Fit:</span>
+                      {/* Filter by Application Date */}
+                      <div className="flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                         <select
-                          value={minScoreFilter}
-                          onChange={(e) => setMinScoreFilter(e.target.value)}
+                          value={applicantDateFilter}
+                          onChange={(e) => setApplicantDateFilter(e.target.value)}
                           className="w-full py-1.5 px-2.5 text-xs border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-500 bg-white font-medium"
                         >
-                          <option value="ALL">All Match Scores</option>
-                          <option value="85">High Fit (85%+)</option>
-                          <option value="75">Good Fit (75%+)</option>
-                          <option value="65">Moderate Fit (65%+)</option>
+                          <option value="ALL">All Application Dates</option>
+                          <option value="TODAY">Applied Today</option>
+                          <option value="WEEK">Past 7 Days</option>
+                          <option value="MONTH">Past 30 Days</option>
+                          <option value="CUSTOM">Custom Range...</option>
+                        </select>
+                      </div>
+
+                      {/* Sort Order */}
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                        <select
+                          value={applicantSortOrder}
+                          onChange={(e) => setApplicantSortOrder(e.target.value)}
+                          className="w-full py-1.5 px-2.5 text-xs border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-500 bg-white font-medium"
+                        >
+                          <option value="NEWEST">Newest Applied First</option>
+                          <option value="OLDEST">Oldest Applied First</option>
                         </select>
                       </div>
                     </div>
+
+                    {/* Custom Date Range Picker */}
+                    {applicantDateFilter === 'CUSTOM' && (
+                      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-100 text-xs">
+                        <span className="font-semibold text-gray-500">From:</span>
+                        <input
+                          type="date"
+                          value={applicantStartDate}
+                          onChange={(e) => setApplicantStartDate(e.target.value)}
+                          className="px-2 py-1 text-xs border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                        <span className="font-semibold text-gray-500">To:</span>
+                        <input
+                          type="date"
+                          value={applicantEndDate}
+                          onChange={(e) => setApplicantEndDate(e.target.value)}
+                          className="px-2 py-1 text-xs border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                        {(applicantStartDate || applicantEndDate) && (
+                          <button
+                            onClick={() => { setApplicantStartDate(''); setApplicantEndDate(''); }}
+                            className="text-xs text-amber-700 hover:text-amber-800 font-semibold cursor-pointer"
+                          >
+                            Reset
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Applicants Table */}
@@ -872,7 +938,7 @@ export default function RecruiterDashboard() {
                           <th className="px-4 py-3 text-left font-bold text-xs uppercase tracking-wider">Candidate</th>
                           <th className="px-4 py-3 text-left font-bold text-xs uppercase tracking-wider">Branch & Roll</th>
                           <th className="px-4 py-3 text-left font-bold text-xs uppercase tracking-wider">CGPA</th>
-                          <th className="px-4 py-3 text-left font-bold text-xs uppercase tracking-wider">AI Fit</th>
+                          <th className="px-4 py-3 text-left font-bold text-xs uppercase tracking-wider">Applied Date</th>
                           <th className="px-4 py-3 text-left font-bold text-xs uppercase tracking-wider">Current Round</th>
                           <th className="px-4 py-3 text-left font-bold text-xs uppercase tracking-wider">Status</th>
                           <th className="px-4 py-3 text-right font-bold text-xs uppercase tracking-wider">Resume</th>
@@ -913,11 +979,16 @@ export default function RecruiterDashboard() {
                               <td className="px-4 py-3.5 font-bold text-gray-900 text-xs">
                                 {app.cgpa ?? 'N/A'}
                               </td>
-                              <td className="px-4 py-3.5">
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
-                                  <Sparkles className="w-3 h-3 text-purple-600" />
-                                  {app.ai_match_score ? `${app.ai_match_score}%` : '82%'}
-                                </span>
+                              <td className="px-4 py-3.5 text-xs text-gray-700">
+                                <div className="flex items-center gap-1.5 font-medium">
+                                  <Calendar className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                                  <span>{app.applied_at ? formatDateTime(app.applied_at, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}</span>
+                                </div>
+                                {app.applied_at && (
+                                  <p className="text-[10px] text-gray-400 pl-5">
+                                    {formatTimeAgo(app.applied_at)}
+                                  </p>
+                                )}
                               </td>
                               <td className="px-4 py-3.5">
                                 {isRejected ? (

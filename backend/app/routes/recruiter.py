@@ -15,6 +15,8 @@ from ..models.job import JobPosting, JobStatus
 from ..models.application import Application, AppStatus
 from ..models.job_round import JobRound
 from ..models.recruiter_invitation import RecruiterInvitation
+from ..models.notification import NotificationCategory
+from ..routes.notifications import create_system_notification
 from ..schemas.rbac import (
     RecruiterActivation, CompanyProfileUpdate,
     JobPostingCreate, JobPostingResponse,
@@ -164,6 +166,22 @@ def create_job_posting(
     db.add(job)
     db.commit()
     db.refresh(job)
+
+    # Flash notification to all TPO admins for governance & drive approval
+    tpo_admins = db.query(User).filter(User.role == RoleEnum.TPO_ADMIN, User.is_active == True).all()
+    comp_name = company.company_name if company and company.company_name else "Recruiter"
+    pkg_label = f"{job.ctc_lpa} LPA" if job.ctc_lpa else "Internship/Stipend"
+    for admin in tpo_admins:
+        create_system_notification(
+            db=db,
+            user_id=admin.id,
+            title=f"⚠️ Drive Approval Required: {comp_name} - {job.title}",
+            message=f"{comp_name} posted a new campus recruitment drive '{job.title}' ({job.job_type}, {pkg_label}) awaiting your review & publication.",
+            category=NotificationCategory.JOB_ALERT,
+            action_url="/tpo"
+        )
+    db.commit()
+
     return {"message": f"Job '{data.title}' submitted for approval", "job_id": job.id, "status": "PENDING_APPROVAL"}
 
 
@@ -248,11 +266,11 @@ def list_applicants(
             "status": app.status.value if app.status else "APPLIED",
             "ai_match_score": app.ai_match_score,
             "ai_analysis": app.ai_analysis,
-            "applied_at": app.applied_at.isoformat() if app.applied_at else None,
+            "applied_at": (app.applied_at.isoformat() + "Z") if app.applied_at else None,
             "current_round_id": r_obj.id if r_obj else None,
             "current_round_number": r_obj.round_number if r_obj else None,
             "current_round_name": r_obj.name if r_obj else None,
-            "scheduled_slot": app.scheduled_slot.isoformat() if app.scheduled_slot else None,
+            "scheduled_slot": (app.scheduled_slot.isoformat() + "Z") if app.scheduled_slot else None,
             "rejection_round_number": app.rejection_round_number,
             "rejection_reason": app.rejection_reason
         })

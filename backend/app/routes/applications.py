@@ -184,10 +184,10 @@ def serialize_application_tracker(app: Application, job: JobPosting, company: Op
         "ctc_lpa": job.ctc_lpa,
         "stipend_monthly": job.stipend_monthly,
         "status": app.status.value if app.status else "APPLIED",
-        "applied_at": app.applied_at.isoformat() if app.applied_at else None,
+        "applied_at": (app.applied_at.isoformat() + "Z") if app.applied_at else None,
         "ai_match_score": app.ai_match_score,
         "current_round_id": app.current_round_id,
-        "scheduled_slot": app.scheduled_slot.isoformat() if app.scheduled_slot else None,
+        "scheduled_slot": (app.scheduled_slot.isoformat() + "Z") if app.scheduled_slot else None,
         "rejection_round_number": app.rejection_round_number,
         "rejection_reason": app.rejection_reason,
         "all_rounds": [

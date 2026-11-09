@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import api, { getAssetUrl } from '../api';
-import { formatTimeString } from '../utils/date';
+import { formatTimeString, formatDateTime, formatTimeAgo } from '../utils/date';
 import { 
   GraduationCap, Lock, CheckCircle2, AlertCircle, FileText, UploadCloud, 
   Briefcase, Sparkles, ExternalLink, RefreshCw, Send, CheckCircle, Clock, 
@@ -22,6 +22,11 @@ export default function StudentDashboard() {
   const [copiedCode, setCopiedCode] = useState(null);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [launchingAppId, setLaunchingAppId] = useState(null);
+
+  // Application Pipeline Filters
+  const [appSearch, setAppSearch] = useState('');
+  const [appDateFilter, setAppDateFilter] = useState('ALL'); // 'ALL', 'TODAY', 'WEEK', 'MONTH'
+  const [appStatusFilter, setAppStatusFilter] = useState('ALL'); // 'ALL', 'IN_PROGRESS', 'OFFERED', 'REJECTED'
 
   // Live timer tick for real-time buffer countdowns
   useEffect(() => {
@@ -479,6 +484,36 @@ export default function StudentDashboard() {
 
   const appliedJobIds = new Set(applications.map(a => a.job_id));
 
+  const filteredApplications = applications.filter(app => {
+    if (appStatusFilter !== 'ALL') {
+      if (appStatusFilter === 'IN_PROGRESS' && (app.status === 'REJECTED' || app.status === 'OFFERED')) return false;
+      if (appStatusFilter === 'OFFERED' && app.status !== 'OFFERED') return false;
+      if (appStatusFilter === 'REJECTED' && app.status !== 'REJECTED') return false;
+    }
+    if (appSearch.trim()) {
+      const q = appSearch.toLowerCase();
+      const matchComp = app.company_name?.toLowerCase().includes(q);
+      const matchTitle = app.title?.toLowerCase().includes(q);
+      const matchRole = app.role_designation?.toLowerCase().includes(q);
+      if (!matchComp && !matchTitle && !matchRole) return false;
+    }
+    if (appDateFilter !== 'ALL' && app.applied_at) {
+      const d = new Date(app.applied_at);
+      const now = new Date();
+      if (appDateFilter === 'TODAY') {
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        if (d < startOfToday) return false;
+      } else if (appDateFilter === 'WEEK') {
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        if (d < weekAgo) return false;
+      } else if (appDateFilter === 'MONTH') {
+        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        if (d < monthAgo) return false;
+      }
+    }
+    return true;
+  });
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Navbar />
@@ -838,8 +873,60 @@ export default function StudentDashboard() {
               </button>
             </div>
 
+            {/* Filter and Date Search Bar */}
+            <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-xs space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+                <div className="md:col-span-5 relative">
+                  <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    placeholder="Search by company or role..."
+                    value={appSearch}
+                    onChange={(e) => setAppSearch(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                  {appSearch && (
+                    <button 
+                      onClick={() => setAppSearch('')} 
+                      className="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="md:col-span-4 flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  <select
+                    value={appDateFilter}
+                    onChange={(e) => setAppDateFilter(e.target.value)}
+                    className="w-full py-2 px-3 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
+                  >
+                    <option value="ALL">All Application Dates</option>
+                    <option value="TODAY">Applied Today</option>
+                    <option value="WEEK">Past 7 Days</option>
+                    <option value="MONTH">Past 30 Days</option>
+                  </select>
+                </div>
+
+                <div className="md:col-span-3 flex items-center gap-1.5">
+                  <Tag className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  <select
+                    value={appStatusFilter}
+                    onChange={(e) => setAppStatusFilter(e.target.value)}
+                    className="w-full py-2 px-3 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
+                  >
+                    <option value="ALL">All Stages ({applications.length})</option>
+                    <option value="IN_PROGRESS">Active Pipeline</option>
+                    <option value="OFFERED">Offers Secured</option>
+                    <option value="REJECTED">Archived / Rejected</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-6">
-              {applications.map(app => {
+              {filteredApplications.map(app => {
                 const currRound = app.current_round;
                 const buffer = getBufferStatus(currRound);
                 const isRejected = app.status === 'REJECTED';
@@ -871,7 +958,7 @@ export default function StudentDashboard() {
                         </div>
                         <h4 className="text-xl font-black text-gray-900 mt-1">{app.job_title}</h4>
                         <div className="flex items-center gap-3 text-xs text-gray-500 mt-1.5">
-                          <span>Applied on {new Date(app.applied_at).toLocaleDateString()}</span>
+                          <span>Applied on {app.applied_at ? formatDateTime(app.applied_at, { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}</span>
                           {app.ai_match_score && (
                             <span className="inline-flex items-center gap-1 font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
                               <Sparkles className="w-3 h-3 text-purple-600" /> Match: {app.ai_match_score}%
@@ -1256,6 +1343,19 @@ export default function StudentDashboard() {
                   </div>
                 );
               })}
+
+              {filteredApplications.length === 0 && applications.length > 0 && (
+                <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center text-gray-500 space-y-2">
+                  <Briefcase className="w-8 h-8 mx-auto text-gray-300" />
+                  <p className="text-sm font-semibold text-gray-700">No applications match your filter.</p>
+                  <button
+                    onClick={() => { setAppSearch(''); setAppDateFilter('ALL'); setAppStatusFilter('ALL'); }}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-bold cursor-pointer"
+                  >
+                    Reset Filters
+                  </button>
+                </div>
+              )}
 
               {applications.length === 0 && (
                 <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center text-gray-500 space-y-3">
