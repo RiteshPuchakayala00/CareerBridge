@@ -421,6 +421,7 @@ def list_all_jobs(
             "eligibility_cgpa": j.eligibility_cgpa,
             "eligible_departments": j.eligible_departments,
             "max_backlogs": j.max_backlogs,
+            "target_batch_year": j.target_batch_year,
             "is_approved": j.is_approved,
             "is_active": j.is_active,
             "status": j.status.value if j.status else "PENDING_APPROVAL",

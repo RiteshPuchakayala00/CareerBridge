@@ -46,6 +46,7 @@ export default function CoordinatorDashboard() {
     stipend_monthly: '',
     eligibility_cgpa: '7.0',
     max_backlogs: '0',
+    target_batch_year: '',
     drive_date: '',
     deadline: '',
     description: '',
@@ -302,6 +303,7 @@ export default function CoordinatorDashboard() {
         stipend_monthly: driveForm.stipend_monthly ? parseFloat(driveForm.stipend_monthly) : null,
         eligibility_cgpa: driveForm.eligibility_cgpa ? parseFloat(driveForm.eligibility_cgpa) : 0,
         max_backlogs: driveForm.max_backlogs ? parseInt(driveForm.max_backlogs) : 0,
+        target_batch_year: driveForm.target_batch_year ? parseInt(driveForm.target_batch_year) : null,
         drive_date: driveForm.drive_date ? new Date(driveForm.drive_date).toISOString() : null,
         deadline: driveForm.deadline ? new Date(driveForm.deadline).toISOString() : null,
         description: driveForm.description,
@@ -317,6 +319,7 @@ export default function CoordinatorDashboard() {
         stipend_monthly: '',
         eligibility_cgpa: '7.0',
         max_backlogs: '0',
+        target_batch_year: '',
         drive_date: '',
         deadline: '',
         description: '',
@@ -670,6 +673,21 @@ export default function CoordinatorDashboard() {
                   </div>
                 </div>
                 <div>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
+                    Target Passout Year / Batch
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 2026 (Leave empty for All Batches)"
+                    value={driveForm.target_batch_year}
+                    onChange={(e) => setDriveForm({ ...driveForm, target_batch_year: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                  />
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    Only students of this graduation year will be eligible to apply.
+                  </p>
+                </div>
+                <div>
                   <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Target Drive Date</label>
                   <input
                     type="date"
@@ -721,7 +739,8 @@ export default function CoordinatorDashboard() {
                       </div>
                       <p className="text-xs text-gray-500 mt-1">
                         Company: <span className="font-semibold text-gray-700">{drive.company_name || 'Coordinator Proposal'}</span> • 
-                        Package: <span className="font-semibold text-blue-600">{drive.ctc_lpa ? `${drive.ctc_lpa} LPA` : 'Stipend'}</span>
+                        Package: <span className="font-semibold text-blue-600">{drive.ctc_lpa ? `${drive.ctc_lpa} LPA` : 'Stipend'}</span> • 
+                        Batch: <span className="font-semibold text-purple-700">{drive.target_batch_year ? `${drive.target_batch_year} Passouts` : 'All Batches'}</span>
                       </p>
                     </div>
                     <div className="flex flex-col sm:items-end gap-2">

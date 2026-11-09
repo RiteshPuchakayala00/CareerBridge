@@ -241,6 +241,12 @@ def browse_jobs(
             is_eligible = False
             reasons.append(f"Maximum {job.max_backlogs} backlogs allowed; you have {profile.active_backlogs}")
         
+        # Rule 6: Target Batch / Graduation Year Check
+        if job.target_batch_year:
+            if profile.graduation_year and profile.graduation_year != job.target_batch_year:
+                is_eligible = False
+                reasons.append(f"Open specifically for {job.target_batch_year} passouts; your graduation batch is {profile.graduation_year}")
+
         results.append(JobWithEligibility(
             id=job.id,
             title=job.title,
@@ -253,6 +259,7 @@ def browse_jobs(
             eligibility_cgpa=job.eligibility_cgpa or 0,
             eligible_departments=job.eligible_departments,
             max_backlogs=job.max_backlogs or 0,
+            target_batch_year=job.target_batch_year,
             deadline=job.deadline,
             drive_date=job.drive_date,
             is_eligible=is_eligible,
@@ -350,6 +357,14 @@ def apply_to_job(
             status_code=403,
             detail=f"Ineligible: Maximum {job.max_backlogs} backlogs allowed; you have {profile.active_backlogs}"
         )
+    
+    # ─── Rule 6: Target Batch Year Check ───
+    if job.target_batch_year:
+        if profile.graduation_year and profile.graduation_year != job.target_batch_year:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Ineligible: This drive is open specifically for {job.target_batch_year} passouts. Your graduation batch is {profile.graduation_year}."
+            )
     
     # Check duplicate application
     existing = db.query(Application).filter(

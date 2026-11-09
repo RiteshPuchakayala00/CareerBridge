@@ -72,6 +72,7 @@ export default function RecruiterDashboard() {
     stipend_monthly: '',
     eligibility_cgpa: '7.0',
     max_backlogs: '0',
+    target_batch_year: '',
     drive_date: '',
     deadline: '',
     description: '',
@@ -305,6 +306,7 @@ export default function RecruiterDashboard() {
         stipend_monthly: jobForm.stipend_monthly ? parseFloat(jobForm.stipend_monthly) : null,
         eligibility_cgpa: jobForm.eligibility_cgpa ? parseFloat(jobForm.eligibility_cgpa) : 0,
         max_backlogs: jobForm.max_backlogs ? parseInt(jobForm.max_backlogs) : 0,
+        target_batch_year: jobForm.target_batch_year ? parseInt(jobForm.target_batch_year) : null,
         drive_date: jobForm.drive_date ? new Date(jobForm.drive_date).toISOString() : null,
         deadline: jobForm.deadline ? new Date(jobForm.deadline).toISOString() : null,
         description: jobForm.description,
@@ -325,6 +327,7 @@ export default function RecruiterDashboard() {
         stipend_monthly: '',
         eligibility_cgpa: '7.0',
         max_backlogs: '0',
+        target_batch_year: '',
         drive_date: '',
         deadline: '',
         description: '',
@@ -636,6 +639,9 @@ export default function RecruiterDashboard() {
                       </div>
                       <div className="flex justify-between items-center text-xs text-gray-500 mt-2.5">
                         <span className="font-medium">{j.job_type}</span>
+                        <span className="text-[10px] font-semibold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md">
+                          🎓 {j.target_batch_year ? `${j.target_batch_year} Batch` : 'All Batches'}
+                        </span>
                         <span className="font-bold text-amber-700 bg-amber-100/60 px-2 py-0.5 rounded-full">
                           {j.applicant_count} Applicants
                         </span>
@@ -1045,6 +1051,22 @@ export default function RecruiterDashboard() {
                     className="w-full px-3.5 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                  Target Graduation / Passout Year (Batch)
+                </label>
+                <input
+                  type="number"
+                  placeholder="e.g. 2026 (Leave empty for All Batches)"
+                  value={jobForm.target_batch_year}
+                  onChange={(e) => setJobForm({ ...jobForm, target_batch_year: e.target.value })}
+                  className="w-full px-3.5 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Only students graduating in this passout year will be eligible to apply.
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

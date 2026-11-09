@@ -313,8 +313,8 @@ export default function TpoDashboard() {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 py-2.5 px-3.5 text-sm font-medium rounded-lg whitespace-nowrap transition-all ${isActive
-                    ? 'bg-purple-600 text-white shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                   }`}
               >
                 <Icon className="w-4 h-4" />
@@ -538,8 +538,8 @@ export default function TpoDashboard() {
                 <div
                   key={batch.id}
                   className={`p-5 rounded-2xl border transition-all flex flex-col justify-between ${batch.is_active
-                      ? 'bg-purple-50/40 border-purple-200 shadow-xs'
-                      : 'bg-gray-50 border-gray-200 opacity-80'
+                    ? 'bg-purple-50/40 border-purple-200 shadow-xs'
+                    : 'bg-gray-50 border-gray-200 opacity-80'
                     }`}
                 >
                   <div>
@@ -610,8 +610,8 @@ export default function TpoDashboard() {
                   <button
                     onClick={() => handleToggleBatch(batch)}
                     className={`w-full py-2.5 text-xs font-bold rounded-xl border transition shadow-2xs ${batch.is_active
-                        ? 'border-red-200 text-red-600 bg-white hover:bg-red-50'
-                        : 'border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+                      ? 'border-red-200 text-red-600 bg-white hover:bg-red-50'
+                      : 'border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
                       }`}
                   >
                     {batch.is_active ? 'Restrict Batch Login' : 'Authorize Batch Login'}
@@ -770,6 +770,9 @@ export default function TpoDashboard() {
                       <td className="px-6 py-4">
                         <p className="font-bold text-gray-900">{job.title}</p>
                         <p className="text-xs text-gray-500">{job.company_name || 'Coordinator Proposal'}</p>
+                        <span className="inline-block mt-1 text-[10px] font-semibold bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200">
+                          🎓 {job.target_batch_year ? `Batch ${job.target_batch_year}` : 'All Batches'}
+                        </span>
                       </td>
                       <td className="px-6 py-4 font-semibold text-blue-600">{job.ctc_lpa ? `${job.ctc_lpa} LPA` : 'Stipend'}</td>
                       <td className="px-6 py-4">{job.eligibility_cgpa ?? 'Any'}</td>

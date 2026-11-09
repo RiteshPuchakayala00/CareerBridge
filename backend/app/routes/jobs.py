@@ -169,6 +169,14 @@ def evaluate_eligibility(student: StudentProfile, job: JobPosting, db: Session) 
                 f"but you currently have {student_backlogs} active backlog(s)."
             )
     
+    # ─── Rule 6: Target Batch / Graduation Year Check ───
+    if job.target_batch_year:
+        if student.graduation_year and student.graduation_year != job.target_batch_year:
+            reasons.append(
+                f"Ineligible: Open specifically for {job.target_batch_year} passouts. "
+                f"Your graduation batch is {student.graduation_year}."
+            )
+    
     is_eligible = len(reasons) == 0
     return is_eligible, reasons
 

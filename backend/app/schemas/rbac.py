@@ -75,6 +75,7 @@ class JobPostingCreate(BaseModel):
     eligibility_cgpa: float = 0.0
     eligible_departments: List[str] = []
     max_backlogs: int = 0
+    target_batch_year: Optional[int] = None
     drive_date: Optional[datetime] = None
     deadline: Optional[datetime] = None
 
@@ -89,6 +90,7 @@ class JobPostingResponse(BaseModel):
     eligibility_cgpa: float
     eligible_departments: Optional[List[str]] = None
     max_backlogs: int
+    target_batch_year: Optional[int] = None
     drive_date: Optional[datetime] = None
     deadline: Optional[datetime] = None
     is_approved: bool
@@ -170,6 +172,7 @@ class JobWithEligibility(BaseModel):
     eligibility_cgpa: float
     eligible_departments: Optional[List[str]] = None
     max_backlogs: int
+    target_batch_year: Optional[int] = None
     deadline: Optional[datetime] = None
     drive_date: Optional[datetime] = None
     is_eligible: bool = False
