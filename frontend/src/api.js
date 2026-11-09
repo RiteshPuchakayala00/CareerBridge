@@ -2,9 +2,25 @@ import axios from 'axios';
 
 const host = typeof window !== 'undefined' && window.location.hostname === '127.0.0.1' ? '127.0.0.1' : 'localhost';
 const defaultBaseUrl = `http://${host}:8050/api`;
+
+// Normalize base URL: strip trailing slashes and ensure /api prefix is present
+const rawBaseUrl = (import.meta.env.VITE_API_URL || defaultBaseUrl).trim().replace(/\/+$/, '');
+const finalBaseUrl = rawBaseUrl.endsWith('/api') ? rawBaseUrl : `${rawBaseUrl}/api`;
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || defaultBaseUrl,
+  baseURL: finalBaseUrl,
 });
+
+/**
+ * Resolves static asset paths (like /uploads/resumes/...) against the backend host
+ */
+export const getAssetUrl = (path) => {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  const serverRoot = finalBaseUrl.replace(/\/api\/?$/, '');
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  return `${serverRoot}${cleanPath}`;
+};
 
 // Interceptor to add JWT token if exists
 api.interceptors.request.use((config) => {

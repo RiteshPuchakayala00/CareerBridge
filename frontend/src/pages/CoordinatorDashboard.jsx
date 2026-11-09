@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
-import api from '../api';
+import api, { getAssetUrl } from '../api';
 import { 
   Award, Users, Radar, Briefcase, Mail, CheckCircle2, AlertCircle, 
   Search, Filter, ExternalLink, RefreshCw, Send, FileText, CheckCheck,
@@ -554,7 +554,7 @@ export default function CoordinatorDashboard() {
                       <td className="px-6 py-4">
                         {student.resume_url ? (
                           <a 
-                            href={`http://localhost:8000${student.resume_url}`} 
+                            href={getAssetUrl(student.resume_url)} 
                             target="_blank" 
                             rel="noreferrer"
                             className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"

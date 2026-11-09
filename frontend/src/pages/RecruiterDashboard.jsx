@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
-import api from '../api';
+import api, { getAssetUrl } from '../api';
 import { 
   Briefcase, Building2, Users, CheckCircle2, AlertCircle, FileText, 
   ExternalLink, Sparkles, ChevronRight, RefreshCw, Send, PlusCircle,
@@ -947,7 +947,7 @@ export default function RecruiterDashboard() {
                               <td className="px-4 py-3.5 text-right">
                                 {app.resume_url ? (
                                   <a 
-                                    href={`http://localhost:8000${app.resume_url}`} 
+                                    href={getAssetUrl(app.resume_url)} 
                                     target="_blank" 
                                     rel="noreferrer"
                                     className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-bold hover:underline"

@@ -15,7 +15,7 @@ engine = create_engine(
     connect_args={"check_same_thread": False, "timeout": 30} if db_url.startswith("sqlite") else {}
 )
 
-if settings.DATABASE_URL.startswith("sqlite"):
+if db_url.startswith("sqlite"):
     @event.listens_for(engine, "connect")
     def set_sqlite_pragma(dbapi_connection, connection_record):
         cursor = dbapi_connection.cursor()

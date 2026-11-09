@@ -63,9 +63,13 @@ if settings.ALLOWED_ORIGINS:
     extra_origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
     cors_origins.extend(extra_origins)
 
+has_wildcard = "*" in cors_origins
+origin_regex = r"^https?://.*" if has_wildcard else r"^https://.*\.vercel\.app$"
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins if "*" not in cors_origins else ["*"],
+    allow_origins=[] if has_wildcard else cors_origins,
+    allow_origin_regex=origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

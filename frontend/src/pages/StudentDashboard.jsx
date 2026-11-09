@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
-import api from '../api';
+import api, { getAssetUrl } from '../api';
 import { 
   GraduationCap, Lock, CheckCircle2, AlertCircle, FileText, UploadCloud, 
   Briefcase, Sparkles, ExternalLink, RefreshCw, Send, CheckCircle, Clock, 
@@ -1289,7 +1289,7 @@ export default function StudentDashboard() {
                     </div>
                   </div>
                   <a
-                    href={`http://localhost:8000${profile.resume_url}`}
+                    href={getAssetUrl(profile.resume_url)}
                     target="_blank"
                     rel="noreferrer"
                     className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold"
