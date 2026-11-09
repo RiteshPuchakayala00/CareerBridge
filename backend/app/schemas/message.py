@@ -19,6 +19,7 @@ class ChatMessageResponse(BaseModel):
     sender_id: int
     sender_name: str
     sender_role: str
+    sender_company: Optional[str] = None
     content: str
     attachment_url: Optional[str] = None
     is_read: bool

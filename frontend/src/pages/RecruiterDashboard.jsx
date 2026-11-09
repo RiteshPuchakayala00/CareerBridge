@@ -1401,6 +1401,7 @@ export default function RecruiterDashboard() {
                         <p className="text-xs text-gray-500 mt-0.5">
                           Drive: <span className="font-semibold text-amber-800">{recruiterThreadDetail.job_title}</span>
                           {recruiterThreadDetail.coordinator_name ? ` • Coordinator: ${recruiterThreadDetail.coordinator_name}` : ''}
+                          {recruiterThreadDetail.company_name ? ` • Enterprise: ${recruiterThreadDetail.company_name}` : ''}
                         </p>
                       </div>
                     </div>

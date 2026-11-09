@@ -15,6 +15,7 @@ from typing import List, Optional
 from ..database import get_db
 from ..models.user import User, RoleEnum
 from ..models.student import StudentProfile
+from ..models.company import Company
 from ..models.job import JobPosting, JobStatus
 from ..models.message import MessageThread, ChatMessage, ThreadType, ThreadStatus
 from ..schemas.message import (
@@ -53,11 +54,19 @@ def _build_thread_summary(thread: MessageThread, current_user_id: int, db: Sessi
         ChatMessage.thread_id == thread.id
     ).order_by(desc(ChatMessage.created_at)).first()
 
+    company_name = None
+    if thread.job and thread.job.company:
+        company_name = thread.job.company.company_name
+    elif thread.recruiter_id:
+        rec_comp = db.query(Company).filter(Company.user_id == thread.recruiter_id).first()
+        if rec_comp:
+            company_name = rec_comp.company_name
+
     return MessageThreadSummary(
         id=thread.id,
         job_id=thread.job_id,
         job_title=thread.job.title if thread.job else "General Placement Query",
-        company_name=thread.job.company.company_name if (thread.job and thread.job.company) else None,
+        company_name=company_name,
         thread_type=thread.thread_type,
         subject=thread.subject,
         status=thread.status,
@@ -208,6 +217,26 @@ def create_thread(
     db.commit()
     db.refresh(first_chat_msg)
 
+    # Recruiter company lookup
+    sender_comp = None
+    if current_user.role == RoleEnum.RECRUITER:
+        rc = db.query(Company).filter(Company.user_id == current_user.id).first()
+        if rc:
+            sender_comp = rc.company_name
+
+    # Notify coordinator when recruiter creates thread
+    if new_thread.thread_type == ThreadType.COORDINATOR_RECRUITER and current_user.role == RoleEnum.RECRUITER and new_thread.coordinator_id:
+        comp_tag = f" ({sender_comp})" if sender_comp else ""
+        create_system_notification(
+            db=db,
+            user_id=new_thread.coordinator_id,
+            title=f"💬 New Query from Recruiter: {current_user.full_name}{comp_tag}",
+            message=f"{new_thread.subject} - {initial_msg[:120]}",
+            category=NotificationCategory.INQUIRY_REPLY,
+            action_url="/coordinator"
+        )
+        db.commit()
+
     summary = _build_thread_summary(new_thread, current_user.id, db)
     return MessageThreadDetail(
         **summary.dict(),
@@ -218,6 +247,7 @@ def create_thread(
                 sender_id=first_chat_msg.sender_id,
                 sender_name=current_user.full_name,
                 sender_role=current_user.role.value if isinstance(current_user.role, RoleEnum) else str(current_user.role),
+                sender_company=sender_comp,
                 content=first_chat_msg.content,
                 attachment_url=first_chat_msg.attachment_url,
                 is_read=first_chat_msg.is_read,
@@ -315,15 +345,24 @@ def get_thread_detail(
         ChatMessage.thread_id == thread.id
     ).order_by(ChatMessage.created_at).all()
 
+    thread_company_name = summary.company_name
     msg_responses = []
     for m in chat_msgs:
         sender_role = m.sender.role.value if isinstance(m.sender.role, RoleEnum) else str(m.sender.role)
+        sender_comp = None
+        if m.sender.role == RoleEnum.RECRUITER:
+            sender_comp = thread_company_name
+            if not sender_comp:
+                rc = db.query(Company).filter(Company.user_id == m.sender_id).first()
+                if rc:
+                    sender_comp = rc.company_name
         msg_responses.append(ChatMessageResponse(
             id=m.id,
             thread_id=m.thread_id,
             sender_id=m.sender_id,
             sender_name=m.sender.full_name,
             sender_role=sender_role,
+            sender_company=sender_comp,
             content=m.content,
             attachment_url=m.attachment_url,
             is_read=m.is_read,
@@ -391,13 +430,34 @@ def send_message(
         )
         db.commit()
 
+    # Emit real-time notification to coordinator when recruiter replies
+    if thread.thread_type == ThreadType.COORDINATOR_RECRUITER and current_user.role == RoleEnum.RECRUITER and thread.coordinator_id:
+        rc = db.query(Company).filter(Company.user_id == current_user.id).first()
+        comp_tag = f" ({rc.company_name})" if rc and rc.company_name else ""
+        create_system_notification(
+            db=db,
+            user_id=thread.coordinator_id,
+            title=f"💬 Message from Recruiter: {current_user.full_name}{comp_tag}",
+            message=f"{current_user.full_name}{comp_tag}: {data.content[:120]}",
+            category=NotificationCategory.INQUIRY_REPLY,
+            action_url="/coordinator"
+        )
+        db.commit()
+
     sender_role = current_user.role.value if isinstance(current_user.role, RoleEnum) else str(current_user.role)
+    sender_comp = None
+    if current_user.role == RoleEnum.RECRUITER:
+        rc = db.query(Company).filter(Company.user_id == current_user.id).first()
+        if rc:
+            sender_comp = rc.company_name
+
     return ChatMessageResponse(
         id=new_msg.id,
         thread_id=new_msg.thread_id,
         sender_id=new_msg.sender_id,
         sender_name=current_user.full_name,
         sender_role=sender_role,
+        sender_company=sender_comp,
         content=new_msg.content,
         attachment_url=new_msg.attachment_url,
         is_read=new_msg.is_read,

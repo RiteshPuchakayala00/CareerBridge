@@ -956,9 +956,17 @@ export default function CoordinatorDashboard() {
                               {t.student_backlogs !== null ? ` • Backlogs: ${t.student_backlogs}` : ''}
                             </p>
                           ) : (
-                            <p className="text-[11px] text-gray-600 font-medium mt-1">
-                              Recruiter: <span className="font-bold text-gray-900">{t.recruiter_name || t.company_name || 'HR Team'}</span>
-                            </p>
+                            <div className="mt-1 space-y-0.5">
+                              <p className="text-[11px] text-gray-600 font-medium flex items-center gap-1.5 flex-wrap">
+                                <span>Recruiter:</span>
+                                <span className="font-bold text-gray-900">{t.recruiter_name || 'HR Representative'}</span>
+                              </p>
+                              {t.company_name && (
+                                <span className="inline-block text-[10px] font-bold text-purple-800 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                                  🏢 {t.company_name}
+                                </span>
+                              )}
+                            </div>
                           )}
 
                           <div className="flex items-center justify-between text-[10px] text-gray-400 mt-2 pt-1 border-t border-gray-100">
@@ -993,9 +1001,16 @@ export default function CoordinatorDashboard() {
                               {threadDetail.status}
                             </span>
                           </div>
-                          <p className="text-xs font-semibold text-emerald-700 mt-0.5">
-                            Drive: {threadDetail.job_title} {threadDetail.company_name ? `• ${threadDetail.company_name}` : ''}
-                          </p>
+                          <div className="flex flex-wrap items-center gap-2 mt-1">
+                            <p className="text-xs font-semibold text-emerald-700">
+                              Drive: {threadDetail.job_title}
+                            </p>
+                            {threadDetail.thread_type === 'COORDINATOR_RECRUITER' && (
+                              <span className="inline-flex items-center gap-1 text-xs font-bold text-purple-800 bg-purple-50 px-2.5 py-0.5 rounded-md border border-purple-200">
+                                🏢 {threadDetail.company_name || 'Enterprise'} • Recruiter: {threadDetail.recruiter_name || 'HR Team'}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         {/* Top Action Buttons (Spec §2.B & §2.C) */}
@@ -1057,8 +1072,13 @@ export default function CoordinatorDashboard() {
                             key={m.id}
                             className={`flex flex-col ${isCoordinator ? 'items-end' : 'items-start'}`}
                           >
-                            <div className="flex items-center gap-2 mb-1 px-1">
+                            <div className="flex items-center gap-1.5 mb-1 px-1 flex-wrap">
                               <span className="text-[11px] font-bold text-gray-700">{m.sender_name}</span>
+                              {m.sender_role === 'RECRUITER' && (m.sender_company || threadDetail.company_name) && (
+                                <span className="text-[10px] font-bold text-purple-800 bg-purple-50 px-1.5 py-0.2 rounded border border-purple-200">
+                                  🏢 {m.sender_company || threadDetail.company_name}
+                                </span>
+                              )}
                               <span className={`text-[9px] font-black uppercase px-1.5 py-0.2 rounded ${
                                 m.sender_role === 'STUDENT' ? 'bg-blue-100 text-blue-800' :
                                 m.sender_role === 'RECRUITER' ? 'bg-purple-100 text-purple-800' :
