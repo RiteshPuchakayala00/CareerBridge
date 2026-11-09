@@ -8,3 +8,4 @@ from .batch_eligibility import BatchEligibility
 from .recruiter_invitation import RecruiterInvitation
 from .message import MessageThread, ChatMessage, ThreadType, ThreadStatus
 from .notification import Notification, NotificationCategory, BroadcastAnnouncement, BroadcastPriority
+from .password_reset import PasswordResetToken

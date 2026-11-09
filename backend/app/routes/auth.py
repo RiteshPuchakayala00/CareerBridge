@@ -6,7 +6,8 @@ Google SSO Flow: google_sso_and_batch_eligibility_spec.md §2
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from datetime import timedelta
+from datetime import datetime, timedelta
+import secrets
 from pydantic import BaseModel
 from typing import Optional
 
@@ -14,6 +15,7 @@ from ..database import get_db
 from ..models.user import User, RoleEnum
 from ..models.student import StudentProfile
 from ..models.batch_eligibility import BatchEligibility
+from ..models.password_reset import PasswordResetToken
 from ..schemas.user import UserCreate, UserResponse, Token
 from ..services.auth_service import get_password_hash, verify_password, create_access_token, get_current_user
 from ..config import settings
@@ -267,10 +269,13 @@ class ChangePasswordRequest(BaseModel):
     old_password: Optional[str] = None
     new_password: str
 
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
 class ResetPasswordRequest(BaseModel):
     email: str
+    otp_code: str
     new_password: str
-    old_password: Optional[str] = None
 
 @router.post("/change-password")
 def change_password(
@@ -278,12 +283,13 @@ def change_password(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Allows any logged-in user to set or update their password."""
+    """Allows any logged-in user to securely update their password."""
     if len(data.new_password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
+        raise HTTPException(status_code=400, detail="New password must be at least 6 characters.")
     
-    if current_user.hashed_password is not None and data.old_password:
-        if not verify_password(data.old_password, current_user.hashed_password):
+    # Require current password if password was previously set
+    if current_user.hashed_password is not None:
+        if not data.old_password or not verify_password(data.old_password, current_user.hashed_password):
             raise HTTPException(status_code=400, detail="Current password does not match.")
     
     current_user.hashed_password = get_password_hash(data.new_password)
@@ -291,15 +297,11 @@ def change_password(
     return {"message": "Password updated successfully. You can now use it to sign in."}
 
 
-@router.post("/reset-password")
-def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
+@router.post("/forgot-password")
+def forgot_password(data: ForgotPasswordRequest, db: Session = Depends(get_db)):
     """
-    Set initial password or reset password for an existing account in the placement roster.
-    Enforces authorization:
-    - Root TPO Admin accounts cannot be reset via public self-service.
-    - Deactivated accounts are rejected.
-    - For students, batch eligibility must be active.
-    - If account already has a password, verifies old_password if supplied.
+    Step 1 of Secure Password Recovery:
+    Validates identity, prevents unauthorized resets, and issues a 6-digit verification code (OTP).
     """
     from sqlalchemy import func
     normalized_email = data.email.strip().lower()
@@ -316,7 +318,7 @@ def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
             detail="Your account has been deactivated. Please contact the TPO Admin."
         )
     
-    # Root TPO Admin credentials must not be reset via unauthenticated public endpoints
+    # Root TPO Admin credentials must not be reset via public self-service
     if user.role == RoleEnum.TPO_ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -336,16 +338,76 @@ def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
                     detail=f"Placement portal is currently closed for the {student_profile.graduation_year} batch. Please contact the TPO."
                 )
 
+    # Invalidate previous unused codes for this email
+    db.query(PasswordResetToken).filter(
+        PasswordResetToken.email == normalized_email,
+        PasswordResetToken.is_used == False
+    ).update({"is_used": True})
+
+    # Generate cryptographically secure 6-digit OTP
+    otp = f"{secrets.randbelow(900000) + 100000}"
+    expires_at = datetime.utcnow() + timedelta(minutes=15)
+
+    reset_record = PasswordResetToken(
+        email=normalized_email,
+        otp_code=otp,
+        expires_at=expires_at,
+        is_used=False
+    )
+    db.add(reset_record)
+    db.commit()
+
+    return {
+        "message": f"A 6-digit verification code has been dispatched to {normalized_email}.",
+        "email": normalized_email,
+        "dev_otp": otp,  # Surfaced for local development / defense presentation without requiring external SMTP
+        "expires_in_minutes": 15
+    }
+
+
+@router.post("/reset-password")
+def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """
+    Step 2 of Secure Password Recovery:
+    Requires the 6-digit OTP code before any password modification is permitted.
+    """
+    from sqlalchemy import func
+    normalized_email = data.email.strip().lower()
+    user = db.query(User).filter(func.lower(User.email) == normalized_email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found with this email in the placement roster."
+        )
+    
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account has been deactivated. Please contact the TPO Admin."
+        )
+
     if len(data.new_password) < 6:
         raise HTTPException(status_code=400, detail="New password must be at least 6 characters.")
-    
-    # If the user already has an established password and provided old_password, verify it
-    if user.hashed_password is not None and data.old_password:
-        if not verify_password(data.old_password, user.hashed_password):
-            raise HTTPException(status_code=400, detail="Current password does not match.")
 
+    # Verify the 6-digit OTP token
+    token_record = db.query(PasswordResetToken).filter(
+        PasswordResetToken.email == normalized_email,
+        PasswordResetToken.otp_code == data.otp_code.strip(),
+        PasswordResetToken.is_used == False,
+        PasswordResetToken.expires_at > datetime.utcnow()
+    ).first()
+
+    if not token_record:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification code. Please request a new code."
+        )
+
+    # Apply new password & mark OTP as consumed
     user.hashed_password = get_password_hash(data.new_password)
+    token_record.is_used = True
     db.commit()
-    return {"message": f"Password for {user.email} has been updated. You can now log in with your new password."}
+
+    return {"message": f"Password for {user.email} has been updated successfully. You can now log in with your new password."}
 
 

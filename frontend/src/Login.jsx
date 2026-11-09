@@ -198,7 +198,7 @@ export default function Login() {
             <div className="flex items-center justify-between mb-1">
               <label className="block text-xs font-semibold text-gray-700 uppercase">Password</label>
               <Link to="/forgot-password" className="text-xs font-medium text-blue-600 hover:text-blue-500">
-                Set / Reset Password?
+                Forgot Password?
               </Link>
             </div>
             <div className="relative">
@@ -222,7 +222,7 @@ export default function Login() {
               </button>
             </div>
             <p className="text-[11px] text-gray-500 mt-1">
-              First time signing in with a password? Use <Link to="/forgot-password" className="text-blue-600 font-semibold hover:underline">Set Password</Link> or sign in directly with Google above.
+              Students & faculty can sign in instantly with Google above. If locked out, use <Link to="/forgot-password" className="text-blue-600 font-semibold hover:underline">Forgot Password</Link>.
             </p>
           </div>
 
