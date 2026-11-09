@@ -5,7 +5,7 @@ import {
   Award, Users, Radar, Briefcase, Mail, CheckCircle2, AlertCircle, 
   Search, Filter, ExternalLink, RefreshCw, Send, FileText, CheckCheck,
   MapPin, Calendar, Clock, Video, Laptop, Settings, Link2,
-  MessageSquare, MessageCircle, HelpCircle, Pin, CheckCircle, ChevronRight, User, Plus, Megaphone
+  MessageSquare, MessageCircle, HelpCircle, Pin, CheckCircle, ChevronRight, User, Plus, Megaphone, Copy
 } from 'lucide-react';
 import BroadcastManager from '../components/BroadcastManager';
 
@@ -54,6 +54,7 @@ export default function CoordinatorDashboard() {
 
   // Invite Recruiter form state
   const [inviteForm, setInviteForm] = useState({ company_name: '', email: '' });
+  const [newInviteLink, setNewInviteLink] = useState(null);
 
   // Messaging & Doubt Desk State (Spec: docs/messaging_and_inquiry_system_spec.md)
   const [threads, setThreads] = useState([]);
@@ -336,6 +337,14 @@ export default function CoordinatorDashboard() {
     try {
       const res = await api.post('/coordinator/invite-recruiter', inviteForm);
       showNotification(res.data.message);
+      if (res.data?.token) {
+        const fullLink = `${window.location.origin}/activate?token=${res.data.token}`;
+        setNewInviteLink({
+          company: inviteForm.company_name,
+          email: inviteForm.email,
+          url: fullLink
+        });
+      }
       setInviteForm({ company_name: '', email: '' });
     } catch (err) {
       showNotification(err.response?.data?.detail || "Failed to invite recruiter", true);
@@ -776,6 +785,37 @@ export default function CoordinatorDashboard() {
                 {loading ? 'Sending Invitation...' : 'Send Outreach Invitation'}
               </button>
             </form>
+
+            {newInviteLink && (
+              <div className="mt-4 p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-900">🔗 Activation Link Ready</span>
+                  <button 
+                    onClick={() => setNewInviteLink(null)} 
+                    className="text-xs text-emerald-400 hover:text-emerald-600"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+                <p className="text-xs text-emerald-700">
+                  Send this link to <strong>{newInviteLink.email}</strong> to activate their recruiter account:
+                </p>
+                <div className="flex items-center gap-1.5 bg-white p-2 rounded-lg border border-emerald-200 text-xs font-mono text-emerald-900 break-all select-all">
+                  <span className="truncate flex-1">{newInviteLink.url}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(newInviteLink.url);
+                      showNotification("Activation link copied to clipboard!");
+                    }}
+                    className="p-1 text-emerald-600 hover:text-emerald-900 shrink-0"
+                    title="Copy Link"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

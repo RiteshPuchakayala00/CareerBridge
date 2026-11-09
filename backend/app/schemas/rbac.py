@@ -49,6 +49,8 @@ class InviteRecruiterResponse(BaseModel):
     message: str
     invitation_id: int
     email: str
+    token: Optional[str] = None
+    activation_url: Optional[str] = None
 
 # ─── Recruiter Schemas ───
 

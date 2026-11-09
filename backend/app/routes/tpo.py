@@ -336,9 +336,11 @@ def invite_recruiter(
     db.refresh(invitation)
     
     return {
-        "message": f"Invitation sent to {data.email} for {data.company_name}",
+        "message": f"Invitation generated for {data.email} ({data.company_name})",
         "invitation_id": invitation.id,
-        "email": invitation.email
+        "email": invitation.email,
+        "token": invitation.token,
+        "activation_url": f"/activate?token={invitation.token}"
     }
 
 
@@ -354,6 +356,7 @@ def list_invitations(
             "id": inv.id,
             "email": inv.email,
             "company_name": inv.company_name,
+            "token": inv.token,
             "is_used": inv.is_used,
             "expires_at": inv.expires_at.isoformat() if inv.expires_at else None,
             "created_at": inv.created_at.isoformat() if inv.created_at else None

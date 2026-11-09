@@ -5,7 +5,7 @@ import {
   Users, Award, Calendar, UploadCloud, Briefcase, Mail, CheckCircle2, 
   AlertCircle, ShieldCheck, UserX, UserCheck, TrendingUp, DollarSign,
   Search, Filter, ExternalLink, RefreshCw, FileText, Edit2, Check, X,
-  ToggleLeft, ToggleRight, Megaphone
+  ToggleLeft, ToggleRight, Megaphone, Copy, Link2
 } from 'lucide-react';
 import BroadcastManager from '../components/BroadcastManager';
 
@@ -26,6 +26,8 @@ export default function TpoDashboard() {
   
   // Recruiter Invite Form State
   const [inviteForm, setInviteForm] = useState({ company_name: '', email: '' });
+  const [newInviteLink, setNewInviteLink] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
   
   // CSV Upload State
   const [csvFile, setCsvFile] = useState(null);
@@ -212,6 +214,14 @@ export default function TpoDashboard() {
     try {
       const res = await api.post('/tpo/invite-recruiter', inviteForm);
       showNotification(res.data.message);
+      if (res.data?.token) {
+        const fullLink = `${window.location.origin}/activate?token=${res.data.token}`;
+        setNewInviteLink({
+          company: inviteForm.company_name,
+          email: inviteForm.email,
+          url: fullLink
+        });
+      }
       setInviteForm({ company_name: '', email: '' });
       fetchInvitations();
     } catch (err) {
@@ -856,6 +866,37 @@ export default function TpoDashboard() {
                   {loading ? 'Dispatching Invite...' : 'Send Recruiter Invitation'}
                 </button>
               </form>
+
+              {newInviteLink && (
+                <div className="mt-4 p-3.5 bg-purple-50 border border-purple-200 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-purple-900">🔗 Activation Link Ready</span>
+                    <button 
+                      onClick={() => setNewInviteLink(null)} 
+                      className="text-xs text-purple-400 hover:text-purple-600"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                  <p className="text-xs text-purple-700">
+                    Send this onboarding URL to <strong>{newInviteLink.email}</strong> to activate their account:
+                  </p>
+                  <div className="flex items-center gap-1.5 bg-white p-2 rounded-lg border border-purple-200 text-xs font-mono text-purple-900 break-all select-all">
+                    <span className="truncate flex-1">{newInviteLink.url}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(newInviteLink.url);
+                        showNotification("Activation link copied to clipboard!");
+                      }}
+                      className="p-1 text-purple-600 hover:text-purple-900 shrink-0"
+                      title="Copy Link"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Invitations History Table */}
@@ -871,32 +912,64 @@ export default function TpoDashboard() {
                       <th className="px-6 py-3 text-left font-semibold">HR Email</th>
                       <th className="px-6 py-3 text-left font-semibold">Status</th>
                       <th className="px-6 py-3 text-left font-semibold">Invited On</th>
+                      <th className="px-6 py-3 text-right font-semibold">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 bg-white">
-                    {invitations.map(inv => (
-                      <tr key={inv.id} className="hover:bg-gray-50 transition">
-                        <td className="px-6 py-4 font-bold text-gray-900">{inv.company_name}</td>
-                        <td className="px-6 py-4 text-gray-600 font-mono text-xs">{inv.email}</td>
-                        <td className="px-6 py-4">
-                          {inv.is_used ? (
-                            <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
-                              Activated ✓
-                            </span>
-                          ) : (
-                            <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
-                              Invite Pending
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-gray-500 text-xs">
-                          {inv.created_at ? new Date(inv.created_at).toLocaleDateString() : 'N/A'}
-                        </td>
-                      </tr>
-                    ))}
+                    {invitations.map(inv => {
+                      const fullLink = inv.token ? `${window.location.origin}/activate?token=${inv.token}` : null;
+                      return (
+                        <tr key={inv.id} className="hover:bg-gray-50 transition">
+                          <td className="px-6 py-4 font-bold text-gray-900">{inv.company_name}</td>
+                          <td className="px-6 py-4 text-gray-600 font-mono text-xs">{inv.email}</td>
+                          <td className="px-6 py-4">
+                            {inv.is_used ? (
+                              <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+                                Activated ✓
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+                                Invite Pending
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-gray-500 text-xs">
+                            {inv.created_at ? new Date(inv.created_at).toLocaleDateString() : 'N/A'}
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            {!inv.is_used && fullLink ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(fullLink);
+                                  setCopiedId(inv.id);
+                                  showNotification(`Activation link for ${inv.company_name} copied!`);
+                                  setTimeout(() => setCopiedId(null), 2500);
+                                }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 rounded-md transition"
+                              >
+                                {copiedId === inv.id ? (
+                                  <>
+                                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>Copied!</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="w-3.5 h-3.5" />
+                                    <span>Copy Link</span>
+                                  </>
+                                )}
+                              </button>
+                            ) : (
+                              <span className="text-xs text-gray-400">Claimed</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {invitations.length === 0 && (
                       <tr>
-                        <td colSpan="4" className="text-center py-8 text-gray-500">No invitations dispatched yet.</td>
+                        <td colSpan="5" className="text-center py-8 text-gray-500">No invitations dispatched yet.</td>
                       </tr>
                     )}
                   </tbody>
